@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Teams Transcript Downloader</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Teams Transcript</h1>
+      <p class="subtitle">Téléchargez vos transcripts de réunion</p>
+    </header>
+
+    <div id="status-container" class="status-container">
+      <div id="status-message" class="status-message">
+        Cliquez sur "Extraire" pour récupérer le transcript
+      </div>
+    </div>
+
+    <div id="preview-container" class="preview-container hidden">
+      <h3>Aperçu</h3>
+      <div class="meeting-info">
+        <span id="meeting-title">-</span>
+        <span id="entries-count">0 entrées</span>
+      </div>
+      <div id="preview-content" class="preview-content"></div>
+    </div>
+
+    <div class="actions">
+      <button id="extract-btn" class="btn btn-primary">
+        <span class="icon">📋</span>
+        Extraire le transcript
+      </button>
+
+      <div id="download-options" class="download-options hidden">
+        <p class="format-label">Format:</p>
+        <div class="format-buttons">
+          <button id="download-json" class="btn btn-secondary">
+            JSON
+          </button>
+          <button id="download-txt" class="btn btn-secondary">
+            TXT
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <footer>
+      <p>Teams Transcript Downloader v1.0</p>
+    </footer>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>
