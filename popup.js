@@ -13,31 +13,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   let currentTranscript = null;
 
-  // Vérifier si on est sur Teams
   async function checkTeamsTab() {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      return tab && tab.url && tab.url.includes('teams.microsoft.com');
+      return tab && tab.url && (tab.url.includes('teams.microsoft.com') || tab.url.includes('teams.cloud.microsoft'));
     } catch (error) {
       return false;
     }
   }
 
-  // Afficher un message de statut
   function showStatus(message, type = 'info') {
     statusMessage.textContent = message;
     statusMessage.className = 'status-message';
-    if (type) {
-      statusMessage.classList.add(type);
-    }
+    if (type) statusMessage.classList.add(type);
   }
 
-  // Formater les données pour l'aperçu
   function formatPreview(data) {
     meetingTitle.textContent = data.title || 'Sans titre';
     entriesCount.textContent = `${data.entries.length} entrée${data.entries.length > 1 ? 's' : ''}`;
-
-    // Afficher les 5 premières entrées
     const previewEntries = data.entries.slice(0, 5);
     previewContent.innerHTML = previewEntries.map(entry => `
       <div class="preview-entry">
@@ -46,7 +39,6 @@ document.addEventListener('DOMContentLoaded', () => {
         <span class="preview-text">${escapeHtml(entry.message)}</span>
       </div>
     `).join('');
-
     if (data.entries.length > 5) {
       previewContent.innerHTML += `
         <div class="preview-entry" style="text-align: center; color: #999;">
@@ -56,190 +48,431 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Échapper le HTML
   function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
   }
 
-  // Vérifier si le content script est chargé et l'injecter si nécessaire
-  async function ensureContentScript(tabId) {
-    try {
-      // Essayer d'envoyer un ping pour vérifier si le content script répond
-      await chrome.tabs.sendMessage(tabId, { action: 'ping' });
-      return true;
-    } catch (error) {
-      // Le content script n'est pas chargé, l'injecter
-      try {
-        await chrome.scripting.executeScript({
-          target: { tabId: tabId },
-          files: ['content.js']
-        });
-        // Attendre un peu que le script s'initialise
-        await new Promise(resolve => setTimeout(resolve, 100));
-        return true;
-      } catch (injectError) {
-        console.error('Failed to inject content script:', injectError);
-        return false;
-      }
-    }
+  // ---- Extraction functions (injected into frames) ----
+
+  // Quick scan: does this frame have transcript content?
+  function frameScanForTranscript() {
+    const doc = document;
+    const bodyText = doc.body ? doc.body.textContent : '';
+
+    // Count time patterns as a heuristic for transcript content
+    const timeMatches = bodyText.match(/\d{1,2}:\d{2}/g);
+    const timeCount = timeMatches ? timeMatches.length : 0;
+
+    // Count potential transcript entries
+    const listCells = doc.querySelectorAll('[data-automationid="ListCell"]').length;
+    const listItems = doc.querySelectorAll('[role="listitem"]').length;
+
+    return {
+      url: window.location.href,
+      origin: window.location.origin,
+      timeCount,
+      listCells,
+      listItems,
+      bodyLength: bodyText.length,
+      hasContent: bodyText.length > 100
+    };
   }
 
-  // Extraire le transcript
+  // Full extraction with scroll
+  function frameFullExtract() {
+    const doc = document;
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // Find container
+    function findContainer() {
+      // Known selectors
+      for (const sel of [
+        '#scrollToTargetTargetedFocusZone',
+        '[data-tid="transcriptContainerRef"]',
+        '[data-tid="transcript-pane"]',
+        '[data-tid="transcript-content"]',
+        '.ms-List'
+      ]) {
+        const el = doc.querySelector(sel);
+        if (el) return el;
+      }
+
+      // Walk up from ListCells
+      const listCells = doc.querySelectorAll('[data-automationid="ListCell"]');
+      if (listCells.length > 0) {
+        let el = listCells[0].parentElement;
+        while (el) {
+          if (el.scrollHeight > el.clientHeight && el.clientHeight > 0) return el;
+          el = el.parentElement;
+        }
+        // If no scrollable parent, return the direct parent
+        return listCells[0].parentElement;
+      }
+
+      // role="list" with children
+      for (const el of doc.querySelectorAll('[role="list"]')) {
+        if (el.children.length > 2) return el;
+      }
+
+      // role="log"
+      const log = doc.querySelector('[role="log"]');
+      if (log) return log;
+
+      // Any div with multiple time patterns
+      for (const el of doc.querySelectorAll('div')) {
+        if (el.children.length > 3 && el.scrollHeight > 200) {
+          const text = el.textContent;
+          const tm = text.match(/\d{1,2}:\d{2}/g);
+          if (tm && tm.length > 3) return el;
+        }
+      }
+
+      return null;
+    }
+
+    function extractEntryFromCell(cell) {
+      const allText = cell.textContent.trim();
+      if (!allText || allText.length < 3) return null;
+
+      const timeMatch = allText.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
+      let time = timeMatch ? timeMatch[1] : '';
+
+      // Speaker
+      let speaker = '';
+      for (const sel of [
+        '[class*="itemDisplayName"]', '[class*="displayName"]',
+        '[class*="speaker"]', '[class*="Speaker"]',
+        '[class*="author"]', '[data-tid*="speaker"]', '[data-tid*="name"]'
+      ]) {
+        const el = cell.querySelector(sel);
+        if (el && el.textContent.trim()) { speaker = el.textContent.trim(); break; }
+      }
+
+      // Message
+      let message = '';
+      for (const sel of [
+        '[class*="eventText"]', '[class*="message"]',
+        '[class*="caption"]', '[class*="Caption"]',
+        '[class*="text-"]', '[data-tid*="text"]', '[data-tid*="caption"]'
+      ]) {
+        const el = cell.querySelector(sel);
+        if (el && el.textContent.trim()) { message = el.textContent.trim(); break; }
+      }
+      if (!message) message = allText;
+
+      // Parse "Name: message" pattern
+      if (!speaker && message) {
+        const m = message.match(/^([A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+(?:\s+[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+)*)\s*[:\n]\s*/);
+        if (m) { speaker = m[1].trim(); message = message.substring(m[0].length).trim(); }
+      }
+
+      // Clean
+      if (time && message.startsWith(time)) message = message.substring(time.length).trim();
+      if (speaker && message.startsWith(speaker)) message = message.substring(speaker.length).replace(/^[\s:]+/, '').trim();
+      message = message.replace(/^\d+\s+minute.*?\d+\s+seconde\s*/, '').trim();
+      message = message.replace(/^:\s*/, '').trim();
+
+      if (!message || message.length < 2) return null;
+      return { time: time || '--:--', speaker: speaker || 'Inconnu', message };
+    }
+
+    function collectEntries(container, seenKeys) {
+      const entries = [];
+      const cellSelectors = '[data-automationid="ListCell"], [role="listitem"]';
+      let cells = container.querySelectorAll(cellSelectors);
+      if (cells.length === 0) cells = container.children;
+
+      for (const cell of cells) {
+        const entry = extractEntryFromCell(cell);
+        if (entry) {
+          const key = entry.speaker + '|' + entry.message.substring(0, 50);
+          if (!seenKeys.has(key)) { seenKeys.add(key); entries.push(entry); }
+        }
+      }
+      return entries;
+    }
+
+    // Main async extraction
+    return (async () => {
+      const container = findContainer();
+      if (!container) return { found: false, reason: 'no container' };
+
+      const allEntries = [];
+      const seenKeys = new Set();
+      const initialScrollTop = container.scrollTop;
+      const isScrollable = container.scrollHeight > container.clientHeight + 50;
+
+      if (!isScrollable) {
+        // Not scrollable - just collect what's visible
+        const entries = collectEntries(container, seenKeys);
+        return { found: entries.length > 0, entries, scrolled: false };
+      }
+
+      // Scroll through the entire container
+      let sameCount = 0;
+      let scrolls = 0;
+
+      while (scrolls < 500) {
+        const entries = collectEntries(container, seenKeys);
+        allEntries.push(...entries);
+
+        const maxScroll = container.scrollHeight - container.clientHeight;
+        if (container.scrollTop >= maxScroll - 50) {
+          sameCount++;
+          if (sameCount >= 5) break;
+        } else {
+          sameCount = 0;
+        }
+
+        container.scrollTop += 500;
+        await sleep(400);
+        scrolls++;
+      }
+
+      // Back to top for final collection
+      container.scrollTop = 0;
+      await sleep(800);
+      const finalEntries = collectEntries(container, seenKeys);
+      allEntries.push(...finalEntries);
+
+      container.scrollTop = initialScrollTop;
+
+      return { found: allEntries.length > 0, entries: allEntries, scrolled: true, scrollCount: scrolls };
+    })();
+  }
+
+  // Get meeting title
+  function frameGetTitle() {
+    for (const sel of ['[data-tid="chat-title"]', '[data-tid="meeting-title"]', 'h1', 'h2', '[role="heading"]']) {
+      const el = document.querySelector(sel);
+      if (el && el.textContent.trim()) return el.textContent.trim();
+    }
+    return null;
+  }
+
+  // ---- Main extraction logic ----
+
   async function extractTranscript() {
     const isTeams = await checkTeamsTab();
-
     if (!isTeams) {
       showStatus('Veuillez ouvrir Microsoft Teams dans un onglet', 'error');
       return;
     }
 
-    showStatus('Chargement du transcript en cours... Cela peut prendre du temps pour les longs meetings.', 'loading');
+    showStatus('Recherche du transcript...', 'loading');
     extractBtn.disabled = true;
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-      // S'assurer que le content script est chargé
-      const scriptLoaded = await ensureContentScript(tab.id);
-      if (!scriptLoaded) {
-        showStatus('Impossible de charger le script d\'extraction', 'error');
+      // Step 1: List all frames in the tab to find the Recap iframe
+      const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
+      console.log('All frames:', frames);
+
+      // Step 2: Scan each frame for transcript content
+      const scanResults = [];
+      for (const frame of frames) {
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id, frameIds: [frame.frameId] },
+            func: frameScanForTranscript
+          });
+          if (results && results[0]) {
+            scanResults.push({ frameId: frame.frameId, frameUrl: frame.url, ...results[0].result });
+          }
+        } catch (e) {
+          console.log(`Cannot scan frame ${frame.frameId} (${frame.url}):`, e.message);
+        }
+      }
+
+      console.log('Scan results:', scanResults);
+
+      // Find the frame with transcript content (most time patterns + list items)
+      let bestFrame = null;
+      let bestScore = 0;
+      for (const sr of scanResults) {
+        const score = sr.timeCount + sr.listCells * 5 + sr.listItems * 5;
+        if (score > bestScore && sr.hasContent) {
+          bestScore = score;
+          bestFrame = sr;
+        }
+      }
+
+      if (!bestFrame || bestScore < 3) {
+        showStatus('Aucun transcript trouvé. Ouvrez le panneau Transcript dans Teams.', 'error');
+        console.log('Best frame:', bestFrame, 'Best score:', bestScore);
         extractBtn.disabled = false;
         return;
       }
 
-      const response = await chrome.tabs.sendMessage(tab.id, {
-        action: 'extractTranscript'
+      console.log('Found transcript in frame:', bestFrame);
+      showStatus(`Transcript trouvé dans ${bestFrame.origin}. Extraction en cours...`, 'loading');
+
+      // Step 3: Full extraction in the transcript frame
+      const extractResults = await chrome.scripting.executeScript({
+        target: { tabId: tab.id, frameIds: [bestFrame.frameId] },
+        func: frameFullExtract
       });
 
-      if (response.success) {
-        currentTranscript = response.data;
-        showStatus('Transcript extrait avec succès !', 'success');
-        formatPreview(currentTranscript);
-        previewContainer.classList.remove('hidden');
-        downloadOptions.classList.remove('hidden');
-        extractBtn.classList.add('hidden');
-      } else {
-        showStatus(response.error || 'Erreur lors de l\'extraction', 'error');
+      let entries = [];
+      if (extractResults && extractResults[0] && extractResults[0].result && extractResults[0].result.found) {
+        entries = extractResults[0].result.entries;
       }
+
+      if (entries.length === 0) {
+        showStatus('Conteneur trouvé mais aucune entrée extraite.', 'error');
+        extractBtn.disabled = false;
+        return;
+      }
+
+      // Step 4: Get title from main frame
+      let title = 'Meeting Transcript';
+      try {
+        const titleResults = await chrome.scripting.executeScript({
+          target: { tabId: tab.id, frameIds: [0] },
+          func: frameGetTitle
+        });
+        if (titleResults && titleResults[0] && titleResults[0].result) {
+          title = titleResults[0].result;
+        }
+      } catch (e) { /* ignore */ }
+
+      currentTranscript = { title, date: new Date().toISOString(), entries, url: tab.url };
+
+      showStatus(`Transcript extrait : ${entries.length} entrées`, 'success');
+      formatPreview(currentTranscript);
+      previewContainer.classList.remove('hidden');
+      downloadOptions.classList.remove('hidden');
+      extractBtn.classList.add('hidden');
+
     } catch (error) {
       console.error('Extraction error:', error);
-      if (error.message && error.message.includes('Receiving end does not exist')) {
-        showStatus('Erreur de connexion. Essayez de rafraîchir la page Teams.', 'error');
-      } else {
-        showStatus('Erreur: ' + error.message, 'error');
-      }
+      showStatus('Erreur: ' + error.message, 'error');
     } finally {
       extractBtn.disabled = false;
     }
   }
 
-  // Télécharger en JSON
+  // ---- Debug ----
+
+  async function debugDOM() {
+    try {
+      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+      const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
+
+      const report = { tabUrl: tab.url, frameCount: frames.length, frames: [] };
+
+      for (const frame of frames) {
+        const frameInfo = {
+          frameId: frame.frameId,
+          parentFrameId: frame.parentFrameId,
+          url: frame.url,
+          type: frame.frameType || 'unknown'
+        };
+
+        try {
+          const results = await chrome.scripting.executeScript({
+            target: { tabId: tab.id, frameIds: [frame.frameId] },
+            func: frameScanForTranscript
+          });
+          if (results && results[0]) {
+            frameInfo.scan = results[0].result;
+          }
+        } catch (e) {
+          frameInfo.scanError = e.message;
+        }
+
+        report.frames.push(frameInfo);
+      }
+
+      const dataStr = JSON.stringify(report, null, 2);
+      const blob = new Blob([dataStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      chrome.downloads.download({ url, filename: 'teams-dom-debug.json', saveAs: true });
+      showStatus(`Debug: ${frames.length} frames inspectés`, 'success');
+    } catch (error) {
+      showStatus('Debug error: ' + error.message, 'error');
+    }
+  }
+
+  // ---- Downloads ----
+
   function downloadJson() {
     if (!currentTranscript) return;
-
     const dataStr = JSON.stringify(currentTranscript, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
-
-    const filename = `transcript-${sanitizeFilename(currentTranscript.title)}-${formatDate()}.json`;
-
     chrome.downloads.download({
-      url: url,
-      filename: filename,
-      saveAs: true
+      url, filename: `transcript-${sanitizeFilename(currentTranscript.title)}-${formatDate()}.json`, saveAs: true
     });
   }
 
-  // Télécharger en TXT
   function downloadTxt() {
     if (!currentTranscript) return;
 
-    // Regrouper les entrées par speaker pour éviter les répétitions
     const formattedEntries = [];
-    let currentSpeaker = null;
-    let currentMessage = '';
+    let curSpeaker = null, curMessage = '';
 
-    currentTranscript.entries.forEach((entry, index) => {
-      const time = entry.time || '';
+    currentTranscript.entries.forEach((entry, i) => {
       const speaker = entry.speaker || 'Inconnu';
-
-      // Si c'est le même speaker, concaténer le message
-      if (speaker === currentSpeaker && time === '') {
-        currentMessage += ' ' + entry.message;
+      if (speaker === curSpeaker && entry.time === '--:--') {
+        curMessage += ' ' + entry.message;
       } else {
-        // Sauvegarder l'entrée précédente si elle existe
-        if (currentSpeaker !== null) {
+        if (curSpeaker !== null) {
           formattedEntries.push({
-            time: currentTranscript.entries[index - 1]?.time || '',
-            speaker: currentSpeaker,
-            message: currentMessage.trim()
+            time: currentTranscript.entries[i - 1]?.time || '',
+            speaker: curSpeaker, message: curMessage.trim()
           });
         }
-        // Commencer une nouvelle entrée
-        currentSpeaker = speaker;
-        currentMessage = entry.message;
+        curSpeaker = speaker;
+        curMessage = entry.message;
       }
     });
-
-    // Ajouter la dernière entrée
-    if (currentSpeaker !== null) {
-      const lastEntry = currentTranscript.entries[currentTranscript.entries.length - 1];
+    if (curSpeaker !== null) {
       formattedEntries.push({
-        time: lastEntry?.time || '',
-        speaker: currentSpeaker,
-        message: currentMessage.trim()
+        time: currentTranscript.entries[currentTranscript.entries.length - 1]?.time || '',
+        speaker: curSpeaker, message: curMessage.trim()
       });
     }
 
     const lines = [
       `Transcript: ${currentTranscript.title}`,
       `Date: ${new Date(currentTranscript.date).toLocaleString()}`,
-      `URL: ${currentTranscript.url}`,
-      '',
-      '========================================',
-      '',
-      ...formattedEntries.map(entry => {
-        const time = entry.time ? `[${entry.time}] ` : '';
-        const speaker = entry.speaker ? `${entry.speaker}: ` : '';
-        return `${time}${speaker}${entry.message}`;
+      `URL: ${currentTranscript.url}`, '',
+      '========================================', '',
+      ...formattedEntries.map(e => {
+        const t = e.time ? `[${e.time}] ` : '';
+        return `${t}${e.speaker}: ${e.message}`;
       }),
-      '',
-      '========================================',
+      '', '========================================',
       `Total: ${formattedEntries.length} entrées`
     ];
 
-    const dataStr = lines.join('\n');
-    const blob = new Blob([dataStr], { type: 'text/plain' });
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
-
-    const filename = `transcript-${sanitizeFilename(currentTranscript.title)}-${formatDate()}.txt`;
-
     chrome.downloads.download({
-      url: url,
-      filename: filename,
-      saveAs: true
+      url, filename: `transcript-${sanitizeFilename(currentTranscript.title)}-${formatDate()}.txt`, saveAs: true
     });
   }
 
-  // Sanitizer le nom de fichier
   function sanitizeFilename(name) {
     return name.replace(/[^a-z0-9\-_]/gi, '_').toLowerCase();
   }
 
-  // Formater la date pour le nom de fichier
   function formatDate() {
-    const now = new Date();
-    return `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    const d = new Date();
+    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   }
 
   // Event listeners
   extractBtn.addEventListener('click', extractTranscript);
   downloadJsonBtn.addEventListener('click', downloadJson);
   downloadTxtBtn.addEventListener('click', downloadTxt);
+  document.getElementById('debug-btn').addEventListener('click', debugDOM);
 
-  // Vérifier au chargement
   checkTeamsTab().then(isTeams => {
     if (!isTeams) {
       showStatus('Veuillez ouvrir Microsoft Teams', 'error');
