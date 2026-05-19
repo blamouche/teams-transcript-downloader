@@ -159,6 +159,7 @@ Le bouton **Debug DOM** du popup déclenche `debugDOM()` : pour chaque frame, il
 ├── popup.js           # Orchestration + fonctions injectées (scan, extract, title, debug)
 ├── icons/             # Icônes de l'extension (16/48/128 + SVG)
 ├── README.md
+├── .github/workflows/ # Workflows GitHub Actions (release automatique)
 └── .prompt-hub/       # Mémoire, lessons, version, releases (workflow prompt-hub)
 ```
 
@@ -195,6 +196,34 @@ Matchers des content scripts : `https://teams.microsoft.com/*` et `https://teams
 - **Nouveau sélecteur de conteneur** : ajouter l'entrée en tête de la liste dans `findContainer()` de [`popup.js`](popup.js).
 - **Nouveau pattern d'entrée** : ajuster `extractEntryFromCell()` (regex time, sélecteurs speaker/message, fallback).
 - **Nouveau domaine Teams** : ajouter le matcher dans `manifest.json` → `content_scripts.matches` et (si nécessaire) dans `checkTeamsTab()` de `popup.js`.
+
+## Release
+
+La publication des releases est entièrement automatisée par le workflow
+[`.github/workflows/release.yml`](.github/workflows/release.yml).
+
+### Déclencher une release
+
+1. Mettre à jour la version dans [`manifest.json`](manifest.json) si nécessaire.
+2. Créer un tag versionné (préfixe `v`) et le pousser :
+   ```bash
+   git tag v1.0.1
+   git push origin v1.0.1
+   ```
+3. Le workflow GitHub Actions s'exécute automatiquement :
+   - construit un dossier temporaire ne contenant que les fichiers nécessaires
+     à l'extension (`manifest.json`, `content.js`, `popup.html`, `popup.css`,
+     `popup.js`, `icons/icon{16,48,128}.png`),
+   - le zippe sous `teams-transcript-downloader-<tag>.zip`,
+   - crée une release GitHub portant le nom du tag, avec le zip en asset et des
+     notes de release auto-générées (`generate_release_notes`).
+
+### Contenu du zip
+
+Le zip ne contient **que** les fichiers exécutables par Chrome. Sont exclus :
+documentation, `.prompt-hub/`, `.github/`, fichiers `*.md`, `CLAUDE.md`,
+`agents.md`. Il peut être chargé tel quel via `chrome://extensions/` → *Charger
+l'extension non empaquetée*.
 
 ## Limitations connues
 
