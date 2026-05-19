@@ -19,3 +19,21 @@
 - Outcome : success.
 - Next : commit `ci: add tag-triggered release workflow with plugin-only zip`
   puis push.
+
+## 2026-05-19 14:20 — agent (Claude)
+
+- Action : Tag `v1.0.0` créé et poussé, workflow GitHub Actions exécuté avec
+  succès en ~11 s, release publiée avec
+  `teams-transcript-downloader-v1.0.0.zip` en asset.
+- Outcome : success.
+
+## 2026-05-19 14:25 — agent (Claude)
+
+- Action : Ajout d'une sous-section *Depuis une release GitHub (recommandé)*
+  dans la section *Installation* du `README.md`, avec lien vers la page des
+  releases du dépôt.
+- Fichiers modifiés : `README.md`, `.prompt-hub/version.md` (0.0.2 → 0.0.3),
+  `.prompt-hub/releases.md`.
+- Outcome : success.
+- Next : commit `docs: link to GitHub releases in install instructions` puis
+  push.

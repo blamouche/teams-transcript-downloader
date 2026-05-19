@@ -8,9 +8,20 @@ La version web de Microsoft Teams affiche les transcripts de réunions mais n'of
 
 ## Installation
 
-### Mode développeur
+### Depuis une release GitHub (recommandé)
 
-1. Téléchargez ou clonez ce dépôt.
+1. Rendez-vous sur la page des releases :
+   [github.com/blamouche/teams-transcript-downloader/releases](https://github.com/blamouche/teams-transcript-downloader/releases).
+2. Téléchargez l'archive `teams-transcript-downloader-vX.Y.Z.zip` de la dernière release.
+3. Décompressez l'archive dans un dossier de votre choix.
+4. Ouvrez Chrome à l'adresse `chrome://extensions/`.
+5. Activez le **Mode développeur** (toggle en haut à droite).
+6. Cliquez sur **« Charger l'extension non empaquetée »** et sélectionnez le
+   dossier décompressé.
+
+### Mode développeur (depuis les sources)
+
+1. Clonez ce dépôt.
 2. Ouvrez Chrome à l'adresse `chrome://extensions/`.
 3. Activez le **Mode développeur** (toggle en haut à droite).
 4. Cliquez sur **« Charger l'extension non empaquetée »**.

@@ -1,5 +1,12 @@
 # Releases
 
+## 0.0.3 — 2026-05-19
+
+- `README.md` : ajout d'une sous-section *Depuis une release GitHub
+  (recommandé)* dans la section *Installation*, avec lien direct vers la page
+  des releases. Le mode développeur depuis les sources est conservé comme
+  alternative.
+
 ## 0.0.2 — 2026-05-19
 
 - Ajout du workflow GitHub Actions `.github/workflows/release.yml` :
