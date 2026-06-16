@@ -291,6 +291,55 @@ function frameDumpSidebar() {
     try { els = Array.from(document.querySelectorAll(sel)); } catch (e) { continue; }
     out[sel] = { count: els.length, samples: els.slice(0, 6).map(info) };
   }
+
+  // Détail enrichi des discussions retenues, pour identifier le signal qui
+  // distingue un chat de réunion d'un chat individuel/groupe.
+  function vis(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+  const NAV = new Set([
+    'copilot', 'vues rapides', 'mentions', 'discussions suivies', 'découverte',
+    'brouillons', 'activité', 'calendrier', 'appels', 'fichiers', 'équipes'
+  ]);
+  const TEAMS_MARKERS = ['afficher tous les canaux', 'voir toutes vos équipes'];
+  function norm(s) { return s.toLowerCase().replace(/\s*\d+$/, '').trim(); }
+
+  function detail(el) {
+    // Icônes / éléments porteurs d'indices (svg, i, data-tid, classes "icon")
+    const iconNodes = Array.from(el.querySelectorAll('svg, i, [data-tid], [class*="icon" i], [class*="Icon"]')).slice(0, 8);
+    const icons = iconNodes.map(n => ({
+      tag: (n.tagName || '').toLowerCase(),
+      dataTid: n.getAttribute && n.getAttribute('data-tid'),
+      aria: n.getAttribute && n.getAttribute('aria-label'),
+      title: n.getAttribute && n.getAttribute('title'),
+      cls: ((n.getAttribute && n.getAttribute('class')) || '').slice(0, 70)
+    }));
+    const txt = (el.textContent || '').trim();
+    return {
+      id: el.id || null,
+      label: txt.slice(0, 60),
+      ariaLabel: el.getAttribute('aria-label'),
+      title: el.getAttribute('title'),
+      dataTid: el.getAttribute('data-tid'),
+      hasImg: !!el.querySelector('img'),
+      hasSvg: !!el.querySelector('svg'),
+      // indices texte : date/heure souvent présents sur les chats de réunion
+      hasDateTime: /\b\d{1,2}[:h]\d{2}\b|\b\d{1,2}\/\d{1,2}\b|lun\.|mar\.|mer\.|jeu\.|ven\.|sam\.|dim\./i.test(txt),
+      icons
+    };
+  }
+
+  const leaves = Array.from(document.querySelectorAll('[role="treeitem"]')).filter(el =>
+    vis(el) && !el.querySelector('[role="treeitem"]') && (el.textContent || '').trim().length >= 2
+  );
+  const kept = [];
+  for (const el of leaves) {
+    const low = norm((el.textContent || '').trim());
+    if (NAV.has(low)) continue;
+    if (TEAMS_MARKERS.some(m => low.startsWith(m))) break;
+    if (!el.id) continue;
+    if (!el.querySelector('img,[role="img"]')) continue;
+    kept.push(detail(el));
+  }
+  out.__chatCandidates = { count: kept.length, kept };
   return out;
 }
 

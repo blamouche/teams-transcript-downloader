@@ -1,5 +1,15 @@
 # Releases
 
+## 0.1.6 — 2026-06-16
+
+- **V2 / diagnostic enrichi** (préparation filtre « réunions uniquement »).
+  `frameDumpSidebar.__chatCandidates` détaille désormais chaque discussion
+  retenue : `ariaLabel`, `title`, `dataTid`, `hasImg`, `hasSvg`, `hasDateTime`
+  et liste d'`icons` (tag/data-tid/aria/title/classe). Objectif : identifier
+  l'icône commune aux chats de réunion (signalée par l'utilisateur) pour
+  distinguer réunions vs chats individuels/groupe. Filtre à implémenter une
+  fois le sélecteur d'icône confirmé.
+
 ## 0.1.5 — 2026-06-16
 
 - **V2 / passage en arrière-plan** (manifest extension 2.0.0 → 2.1.0). Toute

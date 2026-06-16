@@ -158,3 +158,18 @@
   onglet dédié, arrêt).
 - Next : commit `feat(v2): background service worker, loop, stop, settings`
   puis push.
+
+## 2026-06-16 16:50 — agent (Claude)
+
+- Action : Demande utilisateur — scanner UNIQUEMENT les discussions de réunion
+  (pas les chats individuels/groupe). Indice utilisateur clé : « les meetings
+  ont tous la même icône ». → Diagnostic `frameDumpSidebar.__chatCandidates`
+  enrichi (ariaLabel/title/dataTid/hasImg/hasSvg/hasDateTime + liste icons avec
+  data-tid/classe) pour identifier l'icône commune aux réunions.
+- Fichiers : `v2/background.js`, `.prompt-hub/version.md` (0.1.5 → 0.1.6),
+  `.prompt-hub/releases.md`.
+- Outcome : success. EN ATTENTE d'un nouveau Debug DOM (`__chatCandidates`)
+  pour repérer le sélecteur d'icône réunion, puis implémenter le filtre +
+  toggle « Réunions uniquement ».
+- Next : commit `chore(v2): enrich chat diagnostic to find meeting icon` puis
+  push.
