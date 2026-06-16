@@ -56,7 +56,12 @@ Gérer deux versions du plugin côte à côte dans le dépôt :
   `autoDownload`. Téléchargement direct (`saveAs:false`, Maj+clic = dialogue).
   Workflow release packageant deux zips. README et prompt-hub à jour.
 - Validation : syntaxe JS OK (`node --check`), JSON manifests valides.
-- Limitation : la navigation automatique repose sur des sélecteurs DOM Teams
-  fragiles (sidebar, onglets recap/transcript) et n'a pas pu être testée en
-  conditions réelles. Implémentation défensive + repli sur extraction manuelle.
-  À ajuster avec *Debug DOM* si une étape échoue chez l'utilisateur.
+- Limitation initiale : sélecteurs DOM Teams fragiles, non testés en réel.
+  → Résolue via 2 itérations de *Debug DOM* fournies par l'utilisateur :
+  sélecteurs sidebar verrouillés (treeitems id+avatar, clic par id, dépliage
+  "Voir plus", arrêt à la zone Équipes).
+- **Validé en conditions réelles le 2026-06-16** (« ça fonctionne ») sur le
+  tenant Teams v2. Scan complet des discussions, ouverture récap→transcript et
+  téléchargement .txt direct opérationnels. Repli manuel conservé.
+- Versions finales : V1 = v1/ (inchangée) ; V2 = v2/ (manifest 2.0.0).
+  Version prompt-hub 0.1.4.

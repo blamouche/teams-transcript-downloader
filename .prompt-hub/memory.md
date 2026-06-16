@@ -126,3 +126,15 @@
   durée du scan complet).
 - Next : commit `feat(v2): expand chat list, click by id, scan all chats`
   puis push.
+
+## 2026-06-16 16:00 — utilisateur + agent (Claude)
+
+- Action : Validation utilisateur — « ça fonctionne ». La V2 (scan automatique
+  de toutes les discussions, dépliage "Voir plus", clic par id, ouverture
+  récap→transcript, téléchargement .txt direct) fonctionne en conditions
+  réelles sur le tenant Teams v2 (michelingroup). Les libellés d'onglets
+  (« Récapitulatif »/« Transcription ») et le filtrage sidebar n'ont pas
+  nécessité d'ajustement supplémentaire.
+- Outcome : success — feature V2 livrée et validée.
+- Next : aucune action en attente. Branche `feature/v2-auto-download` prête à
+  être mergée (V1 inchangée dans v1/, V2 dans v2/).
