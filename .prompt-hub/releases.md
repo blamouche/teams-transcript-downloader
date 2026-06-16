@@ -1,5 +1,13 @@
 # Releases
 
+## 0.1.17 — 2026-06-16
+
+- **V2 / UI : suppression du bouton « Scanner maintenant »**. Le scan démarre
+  via le switch « Automatisation », rendant le bouton manuel redondant. Le bouton
+  a été retiré de `popup.html` et son listener supprimé de `popup.js`. Le handler
+  `start` reste disponible dans `background.js` pour les déclenchements automatiques
+  (switch, onStartup, onInstalled) et les besoins de debug internes.
+
 ## 0.1.16 — 2026-06-16
 
 - **V2 / UX : retour immédiat à l’état de base sur arrêt manuel**. Avant,

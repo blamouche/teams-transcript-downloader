@@ -275,6 +275,17 @@
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.
 
+## 2026-06-16 21:23 — agent (Claude)
+
+- Action : Suppression du bouton « Scanner maintenant » dans la popup V2,
+  redondant avec le switch d’automatisation.
+- Fichiers modifiés : `v2/popup.html` (bouton retiré), `v2/popup.js`
+  (référence et listener retirés), `.prompt-hub/version.md` (0.1.16 → 0.1.17),
+  `.prompt-hub/releases.md`, `.prompt-hub/todo/todo-20260616-212320-remove-scan-now-button.md`.
+- Validation : `node --check v2/popup.js` + `v2/background.js` OK ; manifest JSON valide.
+- Outcome : success.
+- Next : commit `feat(v2): remove redundant scan-now button` puis push.
+
 ## 2026-06-16 20:52 — agent (Claude)
 
 - Action : Correction du retour à l’état de base quand l’utilisateur clique sur

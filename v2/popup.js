@@ -10,7 +10,6 @@ document.addEventListener('DOMContentLoaded', () => {
   const maxChatsInput = document.getElementById('max-chats');
   const intervalInput = document.getElementById('interval-min');
   const autoDesc = document.getElementById('auto-desc');
-  const autoBtn = document.getElementById('auto-btn');
   const stopBtn = document.getElementById('stop-btn');
   const extractBtn = document.getElementById('extract-btn');
   const debugBtn = document.getElementById('debug-btn');
@@ -73,7 +72,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function render(state) {
     const running = !!(state && state.running);
-    autoBtn.classList.toggle('hidden', running);
     stopBtn.classList.toggle('hidden', !running);
     extractBtn.disabled = running;
     loaderEl.classList.toggle('hidden', !running); // loader pendant le scan
@@ -165,7 +163,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Actions ----
 
-  autoBtn.addEventListener('click', () => send('start'));
   stopBtn.addEventListener('click', () => send('stop'));
   extractBtn.addEventListener('click', () => send('extractManual'));
   resetBtn.addEventListener('click', async () => {
