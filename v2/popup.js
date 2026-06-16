@@ -119,7 +119,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Mise à jour live quand le service worker écrit l'état.
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.scanState) render(changes.scanState.newValue);
+    if (area !== 'local') return;
+    if (changes.scanState) render(changes.scanState.newValue);
+    if (changes.autoEnabled && autoSwitch) {
+      autoSwitch.checked = !!changes.autoEnabled.newValue;
+    }
   });
 
   // ---- Réglages ----

@@ -1,5 +1,14 @@
 # Releases
 
+## 0.1.19 — 2026-06-16
+
+- **V2 / UI : correction du switch Automatisation qui restait visuellement ON**.
+  Le listener `storage.onChanged` de la popup ne surveillait que `scanState` ;
+  quand le service worker écrivait `autoEnabled: false` (ex. clic sur « Arrêter »),
+  le switch conservait son ancien état. La popup met à jour maintenant
+  `autoSwitch.checked` en temps réel lorsque la clé `autoEnabled` change dans
+  `chrome.storage.local`.
+
 ## 0.1.18 — 2026-06-16
 
 - **V2 / UX : Arrêter désactive aussi l’automatisation**. Le bouton « Arrêter »

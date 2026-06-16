@@ -275,6 +275,18 @@
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.
 
+## 2026-06-16 21:39 — agent (Claude)
+
+- Action : Correction du switch « Automatisation » qui restait visuellement ON
+  quand le service worker désactivait `autoEnabled` (clic sur « Arrêter »). Le
+  listener `storage.onChanged` de `popup.js` met à jour désormais
+  `autoSwitch.checked` en temps réel sur changement de la clé `autoEnabled`.
+- Fichiers modifiés : `v2/popup.js`, `.prompt-hub/version.md` (0.1.18 → 0.1.19),
+  `.prompt-hub/releases.md`, `.prompt-hub/todo/todo-20260616-213935-fix-auto-switch-visual-state.md`.
+- Validation : `node --check v2/popup.js` + `v2/background.js` OK ; manifest JSON valide.
+- Outcome : success.
+- Next : commit `fix(v2): sync auto switch visual state from storage` puis push.
+
 ## 2026-06-16 21:26 — agent (Claude)
 
 - Action : Le bouton « Arrêter » désactive désormais aussi l’automatisation
