@@ -18,6 +18,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const statusMessage = document.getElementById('status-message');
   const progressWrap = document.getElementById('progress-wrap');
   const progressBar = document.getElementById('progress-bar');
+  const summaryEl = document.getElementById('summary');
 
   const PHASE_TYPE = {
     idle: 'info', opening: 'loading', expanding: 'loading', scanning: 'loading',
@@ -47,12 +48,31 @@ document.addEventListener('DOMContentLoaded', () => {
     if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
   }
 
+  function renderSummary(summary) {
+    if (!summary) { summaryEl.classList.add('hidden'); summaryEl.innerHTML = ''; return; }
+    const t = summary.finishedAt ? new Date(summary.finishedAt).toLocaleTimeString() : '';
+    summaryEl.innerHTML = `
+      <div class="summary-title">Bilan du dernier scan</div>
+      <ul>
+        <li><b>${summary.downloaded ?? 0}</b> téléchargé(s)</li>
+        <li><b>${summary.skipped ?? 0}</b> déjà traité(s)</li>
+        <li><b>${summary.noTranscript ?? 0}</b> sans transcript</li>
+        <li><b>${summary.total ?? 0}</b> scannée(s)</li>
+      </ul>
+      ${t ? `<div class="summary-time">Terminé à ${t}</div>` : ''}
+    `;
+    summaryEl.classList.remove('hidden');
+  }
+
   function render(state) {
     const running = !!(state && state.running);
     autoBtn.classList.toggle('hidden', running);
     stopBtn.classList.toggle('hidden', !running);
     extractBtn.disabled = running;
     stopCountdown();
+
+    // Bilan persistant (survit au compte à rebours entre deux scans).
+    renderSummary(state && state.summary);
 
     if (!state || !state.phase) {
       showStatus('Prêt. Activez l\'automatisation ou cliquez sur « Scanner maintenant ».', 'info');

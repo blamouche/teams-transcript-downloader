@@ -1,5 +1,15 @@
 # Releases
 
+## 0.1.12 — 2026-06-16
+
+- **V2 / bilan de fin persistant** (extension 2.4.1 → 2.4.2). Le message de
+  bilan était aussitôt écrasé par le compte à rebours du prochain scan → jamais
+  visible en mode automatique. Ajout d'un **bloc « Bilan du dernier scan »**
+  dédié et persistant dans la popup (téléchargés / déjà traités / sans
+  transcript / scannées + heure de fin), alimenté par `scanState.summary`
+  (réinitialisé au début d'un scan, conservé pendant la pause). Le bilan
+  s'affiche aussi en cas d'arrêt manuel.
+
 ## 0.1.11 — 2026-06-16
 
 - **V2 / transcript incomplet corrigé** (extension 2.4.0 → 2.4.1). Le transcript

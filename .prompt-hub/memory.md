@@ -261,3 +261,16 @@
 - Validation : `node --check` OK. À valider en réel (transcript complet).
 - Next : commit `fix(v2): scroll virtualized transcript fully to avoid truncation`
   puis push.
+
+## 2026-06-16 19:05 — agent (Claude)
+
+- Action : Bug — bilan de fin invisible. Cause : `scheduleNextRun` (idle +
+  compte à rebours) écrasait le message 'done' aussitôt. → bloc « Bilan du
+  dernier scan » dédié et persistant dans la popup, alimenté par
+  `scanState.summary` (init à null au début du scan, conservé pendant la pause ;
+  ajouté aussi au phase 'stopped'). Champs : downloaded/skipped/noTranscript/
+  total + finishedAt. Extension 2.4.1 → 2.4.2.
+- Fichiers : `v2/background.js`, `v2/popup.{html,js,css}`, `v2/manifest.json`,
+  `.prompt-hub/version.md` (0.1.11 → 0.1.12), `.prompt-hub/releases.md`.
+- Validation : `node --check` OK.
+- Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.

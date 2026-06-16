@@ -171,6 +171,39 @@ header h1 {
   transition: width 0.3s ease;
 }
 
+.summary {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: #eef0f8;
+  border: 1px solid #d7daf0;
+  border-radius: 6px;
+  font-size: 12px;
+  color: #333;
+}
+
+.summary .summary-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+  color: #4a4d8c;
+}
+
+.summary ul {
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+
+.summary li b {
+  color: #6264a7;
+}
+
+.summary .summary-time {
+  margin-top: 4px;
+  color: #888;
+  font-size: 11px;
+}
+
 .status-container {
   padding: 16px 20px;
   background: #f8f9fa;

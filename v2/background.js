@@ -625,7 +625,7 @@ async function startScan(reason = 'manual') {
 
   try {
     const { maxChats, meetingsOnly } = await getSettings();
-    await setState({ running: true, phase: 'opening', current: 0, total: 0, downloaded: 0, currentLabel: '', nextRunAt: null, message: 'Ouverture de Teams…', reason });
+    await setState({ running: true, phase: 'opening', current: 0, total: 0, downloaded: 0, currentLabel: '', nextRunAt: null, summary: null, message: 'Ouverture de Teams…', reason });
 
     const tabId = await ensureTeamsTab();
 
@@ -653,7 +653,7 @@ async function startScan(reason = 'manual') {
     await setState({ phase: 'scanning', total });
 
     for (let i = 0; i < total; i++) {
-      if (stopRequested) { await setState({ running: false, phase: 'stopped', message: `Arrêté à ${i}/${total}. ${downloaded} téléchargé(s).` }); return; }
+      if (stopRequested) { await setState({ running: false, phase: 'stopped', summary: { downloaded, skipped, noTranscript, total, finishedAt: Date.now() }, message: `Arrêté à ${i}/${total} : ${downloaded} téléchargé(s), ${skipped} déjà traité(s), ${noTranscript} sans transcript.` }); return; }
 
       const label = items[i].label || `discussion ${i + 1}`;
       await setState({ current: i + 1, currentLabel: label, downloaded, message: `Discussion ${i + 1}/${total} : ${label}` });
@@ -687,7 +687,7 @@ async function startScan(reason = 'manual') {
     if (downloaded === 0 && skipped === 0 && lastDiag) {
       doneMsg += ` Diag : ${JSON.stringify(lastDiag)}`;
     }
-    await setState({ running: false, phase: 'done', downloaded, summary: { downloaded, skipped, noTranscript, total }, message: doneMsg });
+    await setState({ running: false, phase: 'done', downloaded, summary: { downloaded, skipped, noTranscript, total, finishedAt: Date.now() }, message: doneMsg });
     // Boucle d'automatisation : si toujours activée et non arrêtée, on relance
     // après une pause d'1 minute.
     const { autoEnabled } = await getSettings();
