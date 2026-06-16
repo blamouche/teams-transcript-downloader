@@ -8,6 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const autoSwitch = document.getElementById('auto-switch');
   const meetingsOnlySwitch = document.getElementById('meetings-only');
   const maxChatsInput = document.getElementById('max-chats');
+  const intervalInput = document.getElementById('interval-min');
   const autoBtn = document.getElementById('auto-btn');
   const stopBtn = document.getElementById('stop-btn');
   const extractBtn = document.getElementById('extract-btn');
@@ -40,19 +41,24 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Rendu de l'état ----
 
+  let countdownTimer = null;
+
+  function stopCountdown() {
+    if (countdownTimer) { clearInterval(countdownTimer); countdownTimer = null; }
+  }
+
   function render(state) {
     const running = !!(state && state.running);
     autoBtn.classList.toggle('hidden', running);
     stopBtn.classList.toggle('hidden', !running);
     extractBtn.disabled = running;
+    stopCountdown();
 
     if (!state || !state.phase) {
       showStatus('Prêt. Activez l\'automatisation ou cliquez sur « Scanner maintenant ».', 'info');
       progressWrap.classList.add('hidden');
       return;
     }
-
-    showStatus(state.message || state.phase, PHASE_TYPE[state.phase] || 'info');
 
     if (running && state.total > 0) {
       progressWrap.classList.remove('hidden');
@@ -61,6 +67,23 @@ document.addEventListener('DOMContentLoaded', () => {
     } else {
       progressWrap.classList.add('hidden');
     }
+
+    // Compte à rebours avant le prochain scan (pause d'automatisation).
+    if (!running && state.phase === 'idle' && state.nextRunAt) {
+      const tick = () => {
+        const ms = state.nextRunAt - Date.now();
+        if (ms <= 0) { showStatus('Lancement du prochain scan…', 'loading'); stopCountdown(); return; }
+        const s = Math.ceil(ms / 1000);
+        const mm = String(Math.floor(s / 60)).padStart(2, '0');
+        const ss = String(s % 60).padStart(2, '0');
+        showStatus(`Prochain scan dans ${mm}:${ss}`, 'info');
+      };
+      tick();
+      countdownTimer = setInterval(tick, 1000);
+      return;
+    }
+
+    showStatus(state.message || state.phase, PHASE_TYPE[state.phase] || 'info');
   }
 
   async function refresh() {
@@ -76,14 +99,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- Réglages ----
 
   async function loadSettings() {
-    const { autoEnabled, maxChats, meetingsOnly } = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly']);
+    const { autoEnabled, maxChats, meetingsOnly, intervalMin } = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly', 'intervalMin']);
     autoSwitch.checked = !!autoEnabled;
     meetingsOnlySwitch.checked = meetingsOnly ?? true;
     maxChatsInput.value = Number.isFinite(maxChats) ? maxChats : 50;
+    intervalInput.value = Number.isFinite(intervalMin) && intervalMin >= 1 ? intervalMin : 5;
   }
 
   meetingsOnlySwitch.addEventListener('change', async () => {
     await chrome.storage.local.set({ meetingsOnly: meetingsOnlySwitch.checked });
+  });
+
+  intervalInput.addEventListener('change', async () => {
+    let v = parseInt(intervalInput.value, 10);
+    if (!Number.isFinite(v) || v < 1) v = 1;
+    if (v > 240) v = 240;
+    intervalInput.value = v;
+    await chrome.storage.local.set({ intervalMin: v });
   });
 
   autoSwitch.addEventListener('change', async () => {

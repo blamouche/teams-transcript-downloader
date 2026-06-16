@@ -12,9 +12,8 @@
 // La popup n'est qu'une télécommande : elle envoie des messages
 // (start/stop/extractManual/debug) et lit l'état via chrome.storage.
 
-const DEFAULTS = { autoEnabled: false, maxChats: 50, meetingsOnly: true };
+const DEFAULTS = { autoEnabled: false, maxChats: 50, meetingsOnly: true, intervalMin: 5 };
 const TEAMS_URL = 'https://teams.microsoft.com/v2/';
-const RESCAN_DELAY_MIN = 1; // pause entre deux scans (boucle d'automatisation)
 
 // État partagé (mémoire du SW) + reflété dans chrome.storage ('scanState').
 let stopRequested = false;
@@ -23,11 +22,12 @@ let isRunning = false;
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function getSettings() {
-  const s = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly']);
+  const s = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly', 'intervalMin']);
   return {
     autoEnabled: s.autoEnabled ?? DEFAULTS.autoEnabled,
     maxChats: Number.isFinite(s.maxChats) ? s.maxChats : DEFAULTS.maxChats,
-    meetingsOnly: s.meetingsOnly ?? DEFAULTS.meetingsOnly
+    meetingsOnly: s.meetingsOnly ?? DEFAULTS.meetingsOnly,
+    intervalMin: Number.isFinite(s.intervalMin) && s.intervalMin >= 1 ? s.intervalMin : DEFAULTS.intervalMin
   };
 }
 
@@ -287,6 +287,15 @@ function frameClickByKeywords(keywords) {
   return { ok: false };
 }
 
+// Clique précisément un élément par son data-tid (onglets stables du récap).
+function frameClickTid(tid) {
+  const el = document.querySelector(`[data-tid="${tid}"]`);
+  if (!el) return { ok: false, tid };
+  const c = el.querySelector('a,button,[role="tab"],[role="link"],[tabindex]') || el;
+  c.click();
+  return { ok: true, tid };
+}
+
 function frameDumpSidebar() {
   function info(el) {
     const cls = el.className && el.className.toString ? el.className.toString() : '';
@@ -542,22 +551,42 @@ async function saveProcessed(map) {
 
 let lastDiag = null; // diagnostic de la dernière tentative d'extraction
 
-async function tryExtractCurrent(tabId, tabUrl) {
-  const recap = await clickAcrossFrames(tabId, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
-  if (recap.ok) await sleep(3500);
-  const transcript = await clickAcrossFrames(tabId, ['transcription', 'transcript', 'afficher la transcription', 'show transcript']);
-  if (transcript.ok) await sleep(3500);
-  else if (!recap.ok) { lastDiag = { recap: false, transcript: false, reason: 'aucun onglet récap/transcription cliquable' }; return null; }
+// Tente une extraction depuis la frame la plus « transcript » (recap SharePoint).
+async function extractBest(tabId, tabUrl, minScore) {
   const { bestFrame, bestScore } = await findTranscriptFrame(tabId);
-  lastDiag = {
-    recap: recap.ok, recapLabel: recap.matched || null,
-    transcript: transcript.ok, transcriptLabel: transcript.matched || null,
-    bestScore, bestFrameUrl: bestFrame ? bestFrame.frameUrl : null
-  };
-  if (!bestFrame || bestScore < 3) { lastDiag.reason = 'transcript introuvable (score insuffisant)'; return null; }
+  if (!bestFrame || bestScore < minScore) return { transcript: null, bestScore, bestFrameUrl: bestFrame ? bestFrame.frameUrl : null };
   const { title, entries } = await extractFromFrame(tabId, bestFrame);
-  if (!entries.length) { lastDiag.reason = 'frame trouvée mais 0 entrée extraite'; return null; }
-  return { title, date: new Date().toISOString(), entries, url: tabUrl };
+  if (!entries.length) return { transcript: null, bestScore, bestFrameUrl: bestFrame.frameUrl, empty: true };
+  return { transcript: { title, date: new Date().toISOString(), entries, url: tabUrl }, bestScore, bestFrameUrl: bestFrame.frameUrl };
+}
+
+// Flux d'extraction d'une réunion ouverte.
+// Constat (debug réel) : à l'ouverture d'une réunion, le récapitulatif charge
+// déjà le transcript dans une iframe SharePoint (data-automationid="ListCell").
+// On tente donc l'extraction DIRECTE d'abord (sans cliquer, ce qui détruisait
+// l'iframe), puis en repli on ouvre l'onglet Récap + sous-onglet Transcript via
+// leurs data-tid stables (pas de match texte destructeur).
+async function tryExtractCurrent(tabId, tabUrl) {
+  // 1) tentative directe (seuil élevé : un vrai transcript a un score important)
+  let r = await extractBest(tabId, tabUrl, 30);
+  if (r.transcript) { lastDiag = { path: 'direct', bestScore: r.bestScore }; return r.transcript; }
+
+  // 2) repli : onglet Récapitulatif puis sous-onglet Transcript (data-tid)
+  const recap = await runInFrame(tabId, 0, frameClickTid, ['tab-item-com.microsoft.chattabs.recap']);
+  await sleep(4000);
+  const tr = await runInFrame(tabId, 0, frameClickTid, ['Transcript']);
+  await sleep(5000);
+
+  r = await extractBest(tabId, tabUrl, 8);
+  lastDiag = {
+    path: 'after-tabs',
+    recapTab: !!(recap && recap.ok),
+    transcriptTab: !!(tr && tr.ok),
+    bestScore: r.bestScore,
+    bestFrameUrl: r.bestFrameUrl,
+    reason: r.transcript ? null : (r.empty ? 'frame trouvée mais 0 entrée' : 'transcript introuvable (score insuffisant)')
+  };
+  return r.transcript;
 }
 
 async function expandChatList(tabId, maxExpand = 20) {
@@ -579,7 +608,7 @@ async function startScan(reason = 'manual') {
 
   try {
     const { maxChats, meetingsOnly } = await getSettings();
-    await setState({ running: true, phase: 'opening', current: 0, total: 0, downloaded: 0, currentLabel: '', message: 'Ouverture de Teams…', reason });
+    await setState({ running: true, phase: 'opening', current: 0, total: 0, downloaded: 0, currentLabel: '', nextRunAt: null, message: 'Ouverture de Teams…', reason });
 
     const tabId = await ensureTeamsTab();
 
@@ -603,6 +632,7 @@ async function startScan(reason = 'manual') {
     const processed = await getProcessed(); // historique persistant
     let downloaded = 0;
     let skipped = 0;
+    let noTranscript = 0;
     await setState({ phase: 'scanning', total });
 
     for (let i = 0; i < total; i++) {
@@ -614,11 +644,11 @@ async function startScan(reason = 'manual') {
       let clickRes;
       try { clickRes = await runInFrame(tabId, 0, frameChats, ['click', items[i].id]); } catch (e) { continue; }
       if (!clickRes || !clickRes.ok) continue;
-      await sleep(2500);
+      await sleep(4000); // laisse le récapitulatif + l'iframe transcript se charger
 
       let transcript;
       try { transcript = await tryExtractCurrent(tabId, TEAMS_URL); } catch (e) { transcript = null; }
-      if (!transcript) continue;
+      if (!transcript) { noTranscript++; continue; }
 
       const key = transcriptKey(transcript);
       if (processed[key]) { // déjà traité lors d'un cycle/session précédent
@@ -635,11 +665,12 @@ async function startScan(reason = 'manual') {
       await setState({ downloaded, message: `Téléchargé : ${transcript.title} (${transcript.entries.length}) — ${downloaded} au total` });
     }
 
-    let doneMsg = `Terminé : ${downloaded} nouveau(x), ${skipped} déjà traité(s), sur ${total} discussions.`;
+    const unit = meetingsOnly ? 'réunion(s)' : 'discussion(s)';
+    let doneMsg = `Terminé : ${downloaded} téléchargé(s), ${skipped} déjà traité(s), ${noTranscript} sans transcript — ${total} ${unit} scannée(s).`;
     if (downloaded === 0 && skipped === 0 && lastDiag) {
-      doneMsg += ` Diag dernière réunion : ${JSON.stringify(lastDiag)}`;
+      doneMsg += ` Diag : ${JSON.stringify(lastDiag)}`;
     }
-    await setState({ running: false, phase: 'done', downloaded, message: doneMsg });
+    await setState({ running: false, phase: 'done', downloaded, summary: { downloaded, skipped, noTranscript, total }, message: doneMsg });
     // Boucle d'automatisation : si toujours activée et non arrêtée, on relance
     // après une pause d'1 minute.
     const { autoEnabled } = await getSettings();
@@ -682,13 +713,16 @@ function stopKeepAlive() { chrome.alarms.clear('keepalive'); }
 // ============================================================
 // Boucle d'automatisation
 //   - activation / démarrage navigateur → scan IMMÉDIAT ;
-//   - entre deux scans → pause de RESCAN_DELAY_MIN minute(s) puis re-scan.
+//   - entre deux scans → pause paramétrable (intervalMin) puis re-scan.
 // ============================================================
 
 async function scheduleNextRun() {
+  const { intervalMin } = await getSettings();
+  const mins = Math.max(1, intervalMin);
   await chrome.alarms.clear('autoStart');
-  chrome.alarms.create('autoStart', { delayInMinutes: RESCAN_DELAY_MIN });
-  await setState({ phase: 'idle', message: `Prochain scan dans ${RESCAN_DELAY_MIN} min…` });
+  chrome.alarms.create('autoStart', { delayInMinutes: mins });
+  // nextRunAt permet à la popup d'afficher un compte à rebours.
+  await setState({ phase: 'idle', nextRunAt: Date.now() + mins * 60000, message: `Prochain scan dans ${mins} min…` });
 }
 
 async function cancelAutoStart() {

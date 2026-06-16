@@ -24,7 +24,7 @@ La V2 déporte toute l'orchestration dans un **service worker** ([`background.js
 - le traitement **continue même popup fermée** ;
 - l'onglet Teams ciblé **n'a pas besoin d'être actif/visible** (`chrome.scripting.executeScript` cible un `tabId` précis), on peut travailler sur d'autres onglets en parallèle ;
 - un **onglet Teams dédié** est ouvert automatiquement (non actif) si aucun n'existe ;
-- si l'**Automatisation** est activée, le scan démarre **immédiatement**, puis **se relance en boucle** avec une **pause d'1 minute entre deux scans** (via `chrome.alarms`) ; il redémarre aussi au lancement du navigateur ;
+- l'**Automatisation est OFF par défaut** (rien ne se lance à l'installation) ; une fois activée, le scan démarre **immédiatement**, puis **se relance en boucle** avec une **pause paramétrable entre deux scans** (défaut **5 min**, via `chrome.alarms`) et un **compte à rebours** dans la popup ; il redémarre aussi au lancement du navigateur ;
 - le scan peut être **arrêté manuellement** en cours (bouton **Arrêter**) ;
 - le nombre de discussions scannées est **paramétrable** (les N premières, défaut **50**, `0` = toutes) ;
 - option **« Réunions uniquement »** (activée par défaut) : ne scanne que les chats de réunion, en s'appuyant sur l'icône d'avatar générique (`span.fui-Avatar__icon` sans `[data-tid="PersonaAvatar"]`), et ignore les chats individuels (avatar + badge de présence) et de groupe (photo).
@@ -86,7 +86,7 @@ Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur
 1. Cliquez sur l'icône de l'extension (inutile d'avoir Teams au premier plan).
 2. Réglez le **nombre de discussions** à scanner (défaut 50, `0` = toutes).
 3. Deux façons de lancer :
-   - **Automatisation ON** → le scan démarre **immédiatement**, puis se relance en boucle (pause d'1 min entre deux scans) ; il reprend aussi au démarrage du navigateur ;
+   - **Automatisation ON** (OFF par défaut) → le scan démarre **immédiatement**, puis se relance en boucle (pause paramétrable, défaut 5 min, avec compte à rebours) ; il reprend aussi au démarrage du navigateur ;
    - **« Scanner maintenant »** → un scan unique immédiat.
 4. Un onglet Teams dédié s'ouvre en arrière-plan si besoin ; vous pouvez **fermer la popup** et continuer à travailler sur vos autres onglets. Le `.txt` de chaque discussion contenant un transcript est téléchargé dans Téléchargements.
 5. **Arrêter** interrompt le scan en cours. En cas d'échec, ouvrez vous-même le panneau Transcript et utilisez **« Extraire manuellement »**.

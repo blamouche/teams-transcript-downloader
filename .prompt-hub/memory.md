@@ -224,3 +224,26 @@
   Hypothèse à vérifier : iframe recap non chargée en onglet inactif.
 - Next : commit `chore(v2): diagnose meeting recap/transcript extraction` puis
   push.
+
+## 2026-06-16 18:30 — agent (Claude)
+
+- Action : `teams-meeting-debug.json` analysé. CAUSE du non-téléchargement : à
+  l'ouverture d'une réunion, le transcript est déjà chargé dans l'iframe
+  SharePoint `xplatplugins…hv=Recap` (ListCell, timeCount 244) ; nos clics texte
+  « récapitulatif »/« transcript » DÉTRUISAIENT cette iframe (afterTranscript :
+  frame recap disparue, retour sur la conversation). Onglet inactif PAS en
+  cause. Tids stables découverts : `tab-item-com.microsoft.chattabs.recap` et
+  sous-onglet `Transcript`.
+  → `tryExtractCurrent` : extraction DIRECTE d'abord (seuil 30), repli clics par
+  `data-tid` (`frameClickTid`) ; délai post-ouverture 4 s.
+  Demandes utilisateur traitées : auto OFF par défaut (déjà), intervalle
+  paramétrable `intervalMin` (défaut 5), compte à rebours popup (`nextRunAt`),
+  bilan de fin « X téléchargés / Y ignorés / Z sans transcript ». Extension
+  2.3.1 → 2.4.0.
+- Fichiers : `v2/background.js`, `v2/popup.{html,js}`, `v2/manifest.json`,
+  `README.md`, `.prompt-hub/version.md` (0.1.9 → 0.1.10), `.prompt-hub/releases.md`.
+- Validation : `node --check` OK.
+- Outcome : success. À valider en réel (téléchargement effectif des transcripts,
+  compte à rebours, bilan).
+- Next : commit `fix(v2): extract transcript from recap iframe; settings/UX`
+  puis push.

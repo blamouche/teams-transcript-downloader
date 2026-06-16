@@ -1,5 +1,26 @@
 # Releases
 
+## 0.1.10 — 2026-06-16
+
+- **V2 / extraction du transcript corrigée** (extension 2.3.1 → 2.4.0). Le
+  `teams-meeting-debug.json` a montré que le récapitulatif charge le transcript
+  dans une iframe SharePoint (`xplatplugins…hv=Recap`, `data-automationid=
+  "ListCell"`) **dès l'ouverture de la réunion**, et que nos clics texte
+  « récapitulatif » puis « transcript » **détruisaient** cette iframe.
+  - `tryExtractCurrent` : extraction **directe** d'abord (seuil de score élevé) ;
+    en repli seulement, clics **par `data-tid` stables**
+    (`tab-item-com.microsoft.chattabs.recap` puis sous-onglet `Transcript`) au
+    lieu de matches texte destructeurs. Ajout de `frameClickTid`.
+  - Délai après ouverture porté à 4 s (chargement de l'iframe recap).
+- **Réglages & UX** (demandes utilisateur) :
+  - Automatisation **OFF par défaut** (déjà le cas, confirmé) ; aucun scan à
+    l'installation.
+  - **Intervalle entre scans paramétrable** (`intervalMin`, défaut 5 min,
+    min 1) — champ dans la popup, utilisé par `scheduleNextRun`.
+  - **Compte à rebours** avant le prochain scan (popup, via `nextRunAt`).
+  - **Bilan de fin enrichi** : « X téléchargé(s), Y déjà traité(s), Z sans
+    transcript — N réunion(s) scannée(s) » (+ `summary` dans l'état).
+
 ## 0.1.9 — 2026-06-16
 
 - **V2 / diagnostic d'extraction** (extension 2.3.0 → 2.3.1). Le scan trouve les
