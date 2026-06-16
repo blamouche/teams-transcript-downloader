@@ -868,7 +868,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'stop':
         stopRequested = true;
         await cancelAutoStart(); // n'enchaîne pas le prochain scan de la boucle
-        await resetToIdleState('Arrêté. Prêt pour un prochain scan.');
+        await chrome.storage.local.set({ autoEnabled: false });
+        await resetToIdleState('Arrêté. Automatisation désactivée.');
+        await updateActionUI();
         sendResponse({ ok: true });
         break;
       case 'extractManual':

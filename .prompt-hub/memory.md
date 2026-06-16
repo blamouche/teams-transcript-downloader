@@ -275,6 +275,18 @@
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.
 
+## 2026-06-16 21:26 — agent (Claude)
+
+- Action : Le bouton « Arrêter » désactive désormais aussi l’automatisation
+  (`autoEnabled: false` dans `chrome.storage.local`) pour éviter qu’un scan ne
+  redémarre automatiquement après un arrêt manuel.
+- Fichiers modifiés : `v2/background.js` (handler `stop`),
+  `.prompt-hub/version.md` (0.1.17 → 0.1.18), `.prompt-hub/releases.md`,
+  `.prompt-hub/todo/todo-20260616-212633-stop-disables-auto.md`.
+- Validation : `node --check v2/background.js` + `v2/popup.js` OK ; manifest JSON valide.
+- Outcome : success.
+- Next : commit `feat(v2): stop button also disables automation` puis push.
+
 ## 2026-06-16 21:23 — agent (Claude)
 
 - Action : Suppression du bouton « Scanner maintenant » dans la popup V2,

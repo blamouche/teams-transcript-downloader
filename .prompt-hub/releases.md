@@ -1,5 +1,14 @@
 # Releases
 
+## 0.1.18 — 2026-06-16
+
+- **V2 / UX : Arrêter désactive aussi l’automatisation**. Le bouton « Arrêter »
+  met désormais `autoEnabled` à `false` dans `chrome.storage.local` en plus
+  d’annuler l’alarme de scan en cours. Le switch « Automatisation » se décoche
+  automatiquement via le listener `storage.onChanged` de la popup, et la pastille
+  d’icône est rafraîchie. Cela évite que la boucle automatique ne redémarre
+  toute seule après un arrêt manuel.
+
 ## 0.1.17 — 2026-06-16
 
 - **V2 / UI : suppression du bouton « Scanner maintenant »**. Le scan démarre
