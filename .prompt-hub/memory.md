@@ -88,3 +88,21 @@
 - Outcome : success. EN ATTENTE du JSON de debug (section `sidebar`) de
   l'utilisateur pour verrouiller les sélecteurs de la liste de discussions.
 - Next : commit `chore(v2): dump sidebar structure in Debug DOM` puis push.
+
+## 2026-06-16 15:10 — agent (Claude)
+
+- Action : Debug DOM reçu (Teams v2, tenant Michelin). Faits clés : sidebar =
+  1 seul `[role="tree"]` data-tid `simple-collab-dnd-rail`, 145
+  `[role="treeitem"]` (classe `fui-TreeItem`) mêlant nav + discussions ; aucun
+  `data-tid="chat-list"`/`chatListContainer`/`role=listitem`. Transcripts
+  probablement dans les iframes outlook.office.com (semanticoverview) /
+  michelingroup-my.sharepoint.com (embed) → couvertes par <all_urls>.
+  → `frameChats` réécrit : `[role="treeitem"]` filtré (visibles, feuilles,
+  hors NAV_LABELS fr/en). `scrollIntoView` avant clic. Diagnostic enrichi
+  (`__chatCandidates`).
+- Fichiers : `v2/popup.js`, `.prompt-hub/version.md` (0.1.2 → 0.1.3),
+  `.prompt-hub/releases.md`.
+- Outcome : success. Caveat virtualisation à valider. EN ATTENTE d'un nouveau
+  Debug DOM (section `__chatCandidates`) pour confirmer le filtrage.
+- Next : commit `fix(v2): target real Teams sidebar treeitems, filter nav`
+  puis push.

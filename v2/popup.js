@@ -77,34 +77,51 @@ document.addEventListener('DOMContentLoaded', () => {
   // Énumère ou clique les discussions de la sidebar Teams.
   //   action === 'list'  → renvoie { ok, items: [{index, label}] }
   //   action === 'click' → clique la discussion à l'index donné
-  // Une seule fonction (injectée) pour garantir la même stratégie de sélection
-  // entre l'énumération et le clic (indices stables).
+  // La sélection est DÉTERMINISTE et identique entre 'list' et 'click' pour
+  // garder des indices stables. On part de [role="treeitem"] (Teams v2 rend la
+  // sidebar en un seul [role="tree"]), puis on filtre :
+  //   - éléments visibles uniquement,
+  //   - feuilles (pas de treeitem descendant) → exclut les en-têtes de section,
+  //   - hors items de navigation (Copilot, Mentions, Activité, Calendrier…).
+  // Cliquer un item de navigation changerait toute la vue et casserait le scan,
+  // d'où le filtrage strict.
   function frameChats(action, index) {
     function visible(el) {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     }
 
-    // Conteneurs/items possibles de la liste de discussions Teams
-    const itemSelectors = [
-      '[data-tid="chat-list-item"]',
-      '[data-tid^="chat-list-item"]',
-      '[id^="chat-list-item"]',
-      '[data-tid="chatListContainer"] [role="treeitem"]',
-      '[data-tid="chatListContainer"] [role="listitem"]',
-      '#chat-list [role="treeitem"]',
-      '#chat-list [role="listitem"]',
-      '[role="tree"] [role="treeitem"]'
-    ];
+    // Libellés de navigation à exclure (fr/en, sans suffixe numérique de badge).
+    const NAV_LABELS = new Set([
+      'copilot', 'vues rapides', 'quick views', 'mentions',
+      'discussions suivies', 'discussions épinglées', 'followed chats',
+      'découverte', 'discover', 'brouillons', 'drafts',
+      'activité', 'activity', 'calendrier', 'calendar', 'appels', 'calls',
+      'fichiers', 'files', 'équipes', 'teams', 'récent', 'recent', 'favoris',
+      'favorites', 'contacts', 'applications', 'apps', 'aide', 'help',
+      'paramètres', 'settings', 'enregistré', 'saved', 'planificateur'
+    ]);
 
-    let items = [];
-    for (const sel of itemSelectors) {
-      const found = document.querySelectorAll(sel);
-      if (found.length) {
-        items = Array.from(found).filter(visible);
-        if (items.length) break;
-      }
+    function isNav(label) {
+      // retire un éventuel badge numérique en fin de texte (ex. "Mentions22")
+      const t = label.toLowerCase().replace(/\s*\d+$/, '').trim();
+      return !t || NAV_LABELS.has(t);
     }
+
+    function collectChatItems() {
+      const all = Array.from(document.querySelectorAll('[role="treeitem"]'));
+      return all.filter(el => {
+        if (!visible(el)) return false;
+        // feuille : aucun treeitem imbriqué (exclut les sections déroulantes)
+        if (el.querySelector('[role="treeitem"]')) return false;
+        const label = (el.textContent || '').trim();
+        if (label.length < 2) return false;
+        if (isNav(label)) return false;
+        return true;
+      });
+    }
+
+    const items = collectChatItems();
 
     if (items.length === 0) {
       return { ok: false, reason: 'no chat items', items: [] };
@@ -115,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ok: true,
         items: items.map((it, i) => ({
           index: i,
+          id: it.id || null,
           label: (it.textContent || '').trim().slice(0, 80)
         }))
       };
@@ -123,9 +141,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // action === 'click'
     const it = items[index];
     if (!it) return { ok: false, reason: 'index out of range', count: items.length };
+    // scrolle l'élément dans la vue (listes virtualisées) puis clique
+    try { it.scrollIntoView({ block: 'center' }); } catch (e) { /* ignore */ }
     const clickable = it.querySelector('a,button,[role="link"],[tabindex]') || it;
     clickable.click();
-    return { ok: true, label: (it.textContent || '').trim().slice(0, 80) };
+    return { ok: true, id: it.id || null, label: (it.textContent || '').trim().slice(0, 80) };
   }
 
   // Clique sur le premier élément visible dont le texte/aria correspond
@@ -372,6 +392,28 @@ document.addEventListener('DOMContentLoaded', () => {
       try { els = Array.from(document.querySelectorAll(sel)); } catch (e) { continue; }
       out[sel] = { count: els.length, samples: els.slice(0, 6).map(info) };
     }
+
+    // Reproduit le filtre de frameChats pour vérifier les discussions retenues.
+    const NAV_LABELS = new Set([
+      'copilot', 'vues rapides', 'quick views', 'mentions',
+      'discussions suivies', 'discussions épinglées', 'followed chats',
+      'découverte', 'discover', 'brouillons', 'drafts',
+      'activité', 'activity', 'calendrier', 'calendar', 'appels', 'calls',
+      'fichiers', 'files', 'équipes', 'teams', 'récent', 'recent', 'favoris',
+      'favorites', 'contacts', 'applications', 'apps', 'aide', 'help',
+      'paramètres', 'settings', 'enregistré', 'saved', 'planificateur'
+    ]);
+    function vis(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+    function isNav(label) { const t = label.toLowerCase().replace(/\s*\d+$/, '').trim(); return !t || NAV_LABELS.has(t); }
+    const leaves = Array.from(document.querySelectorAll('[role="treeitem"]')).filter(el =>
+      vis(el) && !el.querySelector('[role="treeitem"]') && (el.textContent || '').trim().length >= 2
+    );
+    out.__chatCandidates = {
+      kept: leaves.filter(el => !isNav((el.textContent || '').trim()))
+        .map(el => ({ id: el.id || null, hasImg: !!el.querySelector('img,[role="img"]'), label: (el.textContent || '').trim().slice(0, 60) })),
+      excludedAsNav: leaves.filter(el => isNav((el.textContent || '').trim()))
+        .map(el => (el.textContent || '').trim().slice(0, 40))
+    };
     return out;
   }
 

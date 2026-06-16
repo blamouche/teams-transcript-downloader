@@ -1,5 +1,21 @@
 # Releases
 
+## 0.1.3 — 2026-06-16
+
+- **V2 / sélecteurs réels** : exploitation du diagnostic *Debug DOM* fourni par
+  l'utilisateur (Teams `teams.microsoft.com/v2/`). La sidebar est un unique
+  `[role="tree"]` (`data-tid="simple-collab-dnd-rail"`) de 145
+  `[role="treeitem"]` mêlant navigation et discussions. `frameChats` réécrit
+  pour cibler `[role="treeitem"]` puis filtrer : visibles, feuilles (sans
+  treeitem imbriqué), hors libellés de navigation (Copilot, Mentions, Activité,
+  Calendrier… fr/en, badge numérique ignoré). Ajout d'un `scrollIntoView` avant
+  clic (listes virtualisées) et de l'`id` dans les résultats.
+- Diagnostic enrichi : `frameDumpSidebar` renvoie `__chatCandidates`
+  (discussions retenues `kept` avec id/hasImg/label + `excludedAsNav`) pour
+  vérifier le filtrage.
+- Caveat connu : liste de discussions potentiellement virtualisée (seuls les
+  items visibles sont dans le DOM) — à valider sur le prochain debug.
+
 ## 0.1.2 — 2026-06-16
 
 - **V2 / diagnostic** : le bouton *Debug DOM* dumpe désormais aussi la structure
