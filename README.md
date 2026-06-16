@@ -9,7 +9,7 @@ Le dépôt fournit **deux versions** complètes de l'extension, dans deux dossie
 | Version | Dossier | Fonctionnement |
 |---|---|---|
 | **V1** | [`v1/`](v1/) | Extraction **manuelle** : on ouvre soi-même le panneau Transcript dans Teams, puis on clique sur *Extraire*. |
-| **V2** | [`v2/`](v2/) | Tout V1 **+ automatisation** : un switch active le scan de **toutes les discussions** de l'onglet Teams ; pour chacune, l'extension ouvre le récapitulatif et l'onglet Transcript, puis télécharge le `.txt` directement dans le dossier Téléchargements. Le bouton manuel de la V1 reste disponible en secours. |
+| **V2** | [`v2/`](v2/) | Tout V1 **+ automatisation en arrière-plan** (service worker) : scan des N premières discussions (paramétrable), **même popup fermée** et **sans que l'onglet Teams soit actif**, avec ouverture auto d'un onglet Teams dédié, démarrage automatique 1 min après activation, et arrêt manuel. Le bouton manuel de la V1 reste disponible en secours. |
 
 La V1 reste strictement inchangée. La V2 est un sur-ensemble.
 
@@ -17,20 +17,30 @@ La V1 reste strictement inchangée. La V2 est un sur-ensemble.
 
 La version web de Microsoft Teams affiche les transcripts de réunions mais n'offre pas de bouton de téléchargement natif. Cette extension scanne automatiquement la page et ses iframes (notamment celles de la vue *Recap*), extrait chaque ligne du transcript (heure, orateur, message) puis propose un export en JSON structuré ou en TXT lisible.
 
-### V2 — téléchargement automatique
+### V2 — automatisation en arrière-plan
 
-La V2 ajoute un **switch d'automatisation** (état persistant via `chrome.storage.local`) et une orchestration de navigation dans Teams.
+La V2 déporte toute l'orchestration dans un **service worker** ([`background.js`](v2/background.js)). Conséquences :
 
-Quand le switch **Automatisation** est activé, la V2 **scanne toutes les discussions** de la sidebar de l'onglet Teams ouvert pour y trouver les transcripts. Pour chaque discussion :
+- le traitement **continue même popup fermée** ;
+- l'onglet Teams ciblé **n'a pas besoin d'être actif/visible** (`chrome.scripting.executeScript` cible un `tabId` précis), on peut travailler sur d'autres onglets en parallèle ;
+- un **onglet Teams dédié** est ouvert automatiquement (non actif) si aucun n'existe ;
+- si l'**Automatisation** est activée, le scan démarre **immédiatement**, puis **se relance en boucle** avec une **pause d'1 minute entre deux scans** (via `chrome.alarms`) ; il redémarre aussi au lancement du navigateur ;
+- le scan peut être **arrêté manuellement** en cours (bouton **Arrêter**) ;
+- le nombre de discussions scannées est **paramétrable** (les N premières, défaut **50**, `0` = toutes).
 
-1. ouverture de la discussion (parcours par index, stable) ;
-2. tentative d'ouverture du **récapitulatif de réunion** ;
-3. tentative de clic sur l'onglet **Transcript** ;
-4. si un transcript est détecté, extraction (même moteur que la V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements (`saveAs:false`, sans boîte de dialogue).
+Déroulé du scan, pour chaque discussion du bloc **Discussions** :
 
-Le scan déplie d'abord « Voir plus » pour charger les discussions masquées, puis cible le bloc **Discussions** (treeitems avec avatar, hors navigation et hors canaux d'équipe). Les discussions sans récapitulatif/transcript sont ignorées (skip rapide), les transcripts en double (même titre + même nombre d'entrées) ne sont téléchargés qu'une fois, et le scan est plafonné à 250 discussions. Activer le switch lance immédiatement le scan ; le bouton **« Scanner toutes les discussions »** permet de le relancer.
+1. dépliage de « Voir plus » pour charger les discussions masquées ;
+2. sélection des discussions = treeitems feuilles **avec `id` + avatar** (hors navigation et hors canaux d'équipe) ;
+3. ouverture de la discussion **par son `id`** (`getElementById`) ;
+4. tentative d'ouverture du **récapitulatif** puis de l'onglet **Transcript** (skip rapide si aucun) ;
+5. si un transcript est détecté, extraction (moteur V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements.
 
-Si l'automatisation est désactivée (ou en cas d'échec), le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur le panneau Transcript déjà ouvert.
+Les transcripts en double (même titre + même nombre d'entrées) ne sont téléchargés qu'une fois. La popup affiche l'état/progression en direct (lu dans `chrome.storage.local`, clé `scanState`).
+
+> Note technique : le service worker n'ayant pas de DOM, le téléchargement se fait via une **`data:` URL** (et non `URL.createObjectURL`).
+
+Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur le panneau Transcript déjà ouvert de l'onglet actif (repli).
 
 ## Installation
 
@@ -70,14 +80,15 @@ Si l'automatisation est désactivée (ou en cas d'échec), le bouton **« Extrai
 4. Cliquez sur **« Extraire le transcript »** — l'extension scanne automatiquement les iframes et choisit celle qui contient le transcript.
 5. Vérifiez l'aperçu, puis téléchargez au format **JSON** ou **TXT**.
 
-**V2 (automatique)**
+**V2 (automatique, en arrière-plan)**
 
-1. Ouvrez Microsoft Teams dans Chrome (inutile d'ouvrir une réunion au préalable).
-2. Cliquez sur l'icône de l'extension.
-3. Activez le switch **Automatisation** : le scan de toutes les discussions démarre aussitôt (l'état est mémorisé). Le bouton **« Scanner toutes les discussions »** permet de relancer.
-4. L'extension parcourt chaque discussion, ouvre le récapitulatif et l'onglet Transcript, et télécharge dans Téléchargements le `.txt` de chaque discussion contenant un transcript.
-5. Si une discussion n'a pas de transcript, elle est ignorée. En cas d'échec global, ouvrez vous-même le panneau Transcript et utilisez **« Extraire manuellement »**.
-   - Astuce : sur les boutons **JSON** / **TXT**, **Maj+clic** force la boîte de dialogue « Enregistrer sous ».
+1. Cliquez sur l'icône de l'extension (inutile d'avoir Teams au premier plan).
+2. Réglez le **nombre de discussions** à scanner (défaut 50, `0` = toutes).
+3. Deux façons de lancer :
+   - **Automatisation ON** → le scan démarre **immédiatement**, puis se relance en boucle (pause d'1 min entre deux scans) ; il reprend aussi au démarrage du navigateur ;
+   - **« Scanner maintenant »** → un scan unique immédiat.
+4. Un onglet Teams dédié s'ouvre en arrière-plan si besoin ; vous pouvez **fermer la popup** et continuer à travailler sur vos autres onglets. Le `.txt` de chaque discussion contenant un transcript est téléchargé dans Téléchargements.
+5. **Arrêter** interrompt le scan en cours. En cas d'échec, ouvrez vous-même le panneau Transcript et utilisez **« Extraire manuellement »**.
 
 ## Architecture technique
 
@@ -210,12 +221,13 @@ Le bouton **Debug DOM** du popup déclenche `debugDOM()` : pour chaque frame, il
 │   ├── popup.css      # Styles (thème Teams)
 │   ├── popup.js       # Orchestration + fonctions injectées (scan, extract, title, debug)
 │   └── icons/         # Icônes de l'extension (16/48/128 + SVG)
-├── v2/                # Version 2 — navigation automatique (sur-ensemble de V1)
-│   ├── manifest.json  # Manifest V3 (version 2.0.0, nom distinct)
+├── v2/                # Version 2 — automatisation en arrière-plan (sur-ensemble de V1)
+│   ├── manifest.json  # Manifest V3 (version 2.0.0, service worker, perms tabs/alarms)
+│   ├── background.js  # Service worker : orchestration, scan, tab dédié, alarms, download
 │   ├── content.js
-│   ├── popup.html     # UI : bouton auto + bouton manuel
+│   ├── popup.html     # UI télécommande : switch, nb discussions, start/stop, manuel
 │   ├── popup.css
-│   ├── popup.js       # V1 + orchestration auto (sidebar → recap → transcript) + download direct
+│   ├── popup.js       # Télécommande : messages au SW + rendu de l'état (storage)
 │   └── icons/
 ├── README.md
 ├── .github/workflows/ # Workflows GitHub Actions (release automatique des 2 versions)
@@ -234,7 +246,9 @@ Déclarées dans [`manifest.json`](manifest.json) :
 | `scripting` | Injecter `frameScanForTranscript` / `frameFullExtract` / `frameGetTitle` via `chrome.scripting.executeScript`. |
 | `downloads` | Déclencher le téléchargement des fichiers JSON/TXT/debug. |
 | `webNavigation` | Appeler `chrome.webNavigation.getAllFrames` pour énumérer les iframes (nécessaire pour *Recap*). |
-| `storage` *(V2)* | Mémoriser l'état du switch *Automatisation* (`chrome.storage.local`). |
+| `storage` *(V2)* | Réglages (switch *Automatisation*, nombre de discussions) et état du scan (`chrome.storage.local`). |
+| `tabs` *(V2)* | Ouvrir/retrouver l'onglet Teams dédié et le cibler sans qu'il soit actif. |
+| `alarms` *(V2)* | Déclenchement automatique 1 min après activation + keep-alive du service worker pendant un long scan. |
 | `host_permissions: <all_urls>` | Pouvoir cibler les iframes *Recap* servies depuis des origines Microsoft variables. |
 
 Matchers des content scripts : `https://teams.microsoft.com/*` et `https://teams.cloud.microsoft/*` (`run_at: document_idle`).

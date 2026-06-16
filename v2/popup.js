@@ -1,42 +1,24 @@
-// Popup script pour Teams Transcript Downloader v2 (auto)
+// Popup — Teams Transcript Downloader v2 (auto)
 //
-// V2 = V1 + automatisation de la navigation dans Teams.
-// En un clic, le plugin :
-//   1. cherche une discussion de type "meeting" dans la sidebar,
-//   2. l'ouvre,
-//   3. ouvre le récapitulatif de réunion,
-//   4. clique sur "Transcript",
-//   5. extrait le transcript (logique V1) et le télécharge en .txt
-//      directement dans le dossier Téléchargements (sans boîte de dialogue).
-//
-// Le bouton "Extraire manuellement" conserve le comportement de la V1 comme
-// solution de secours si la navigation automatique échoue.
+// La popup n'est qu'une télécommande : toute l'orchestration tourne dans le
+// service worker (background.js), qui continue même popup fermée. Ici on se
+// contente d'envoyer des messages et de refléter l'état lu dans chrome.storage.
 
 document.addEventListener('DOMContentLoaded', () => {
-  const autoBtn = document.getElementById('auto-btn');
   const autoSwitch = document.getElementById('auto-switch');
+  const maxChatsInput = document.getElementById('max-chats');
+  const autoBtn = document.getElementById('auto-btn');
+  const stopBtn = document.getElementById('stop-btn');
   const extractBtn = document.getElementById('extract-btn');
-  const downloadJsonBtn = document.getElementById('download-json');
-  const downloadTxtBtn = document.getElementById('download-txt');
+  const debugBtn = document.getElementById('debug-btn');
   const statusMessage = document.getElementById('status-message');
-  const previewContainer = document.getElementById('preview-container');
-  const downloadOptions = document.getElementById('download-options');
-  const meetingTitle = document.getElementById('meeting-title');
-  const entriesCount = document.getElementById('entries-count');
-  const previewContent = document.getElementById('preview-content');
+  const progressWrap = document.getElementById('progress-wrap');
+  const progressBar = document.getElementById('progress-bar');
 
-  let currentTranscript = null;
-
-  function sleepMs(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-  async function checkTeamsTab() {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      return tab && tab.url && (tab.url.includes('teams.microsoft.com') || tab.url.includes('teams.cloud.microsoft'));
-    } catch (error) {
-      return false;
-    }
-  }
+  const PHASE_TYPE = {
+    idle: 'info', opening: 'loading', expanding: 'loading', scanning: 'loading',
+    done: 'success', stopped: 'info', error: 'error'
+  };
 
   function showStatus(message, type = 'info') {
     statusMessage.textContent = message;
@@ -44,813 +26,86 @@ document.addEventListener('DOMContentLoaded', () => {
     if (type) statusMessage.classList.add(type);
   }
 
-  function formatPreview(data) {
-    meetingTitle.textContent = data.title || 'Sans titre';
-    entriesCount.textContent = `${data.entries.length} entrée${data.entries.length > 1 ? 's' : ''}`;
-    const previewEntries = data.entries.slice(0, 5);
-    previewContent.innerHTML = previewEntries.map(entry => `
-      <div class="preview-entry">
-        <span class="preview-time">${entry.time || '--:--'}</span>
-        <span class="preview-speaker">${entry.speaker || 'Inconnu'}:</span>
-        <span class="preview-text">${escapeHtml(entry.message)}</span>
-      </div>
-    `).join('');
-    if (data.entries.length > 5) {
-      previewContent.innerHTML += `
-        <div class="preview-entry" style="text-align: center; color: #999;">
-          ... et ${data.entries.length - 5} entrées de plus
-        </div>
-      `;
-    }
-  }
-
-  function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
-  }
-
-  // ============================================================
-  // Fonctions injectées dans les frames pour l'AUTOMATISATION
-  // ============================================================
-
-  // Énumère ou clique les discussions de la sidebar Teams.
-  //   action === 'list'  → renvoie { ok, items: [{id, label}] }
-  //   action === 'click' → clique la discussion dont l'id == arg (getElementById)
-  //
-  // Modèle DOM observé (Teams v2, debug réel) : la sidebar est un seul
-  // [role="tree"] de [role="treeitem"]. La zone Discussions précède la zone
-  // Équipes/canaux. Séparation nette et fiable :
-  //   - chats = feuilles visibles AVEC un id (menur…) ET un avatar (img),
-  //   - on s'arrête (break) au 1er marqueur de la zone Équipes
-  //     ("Afficher tous les canaux", "Voir toutes vos équipes"),
-  //   - on ignore la navigation et les contrôles ("Voir plus" sans id).
-  // Les canaux (sans avatar) et les en-têtes (non-feuilles) sont écartés.
-  function frameChats(action, arg) {
-    function visible(el) {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
-    }
-
-    const NAV_LABELS = new Set([
-      'copilot', 'vues rapides', 'quick views', 'mentions',
-      'discussions suivies', 'discussions épinglées', 'followed chats',
-      'découverte', 'discover', 'brouillons', 'drafts',
-      'activité', 'activity', 'calendrier', 'calendar', 'appels', 'calls',
-      'fichiers', 'files', 'équipes', 'teams', 'récent', 'recent', 'favoris',
-      'favorites', 'contacts', 'applications', 'apps', 'aide', 'help',
-      'paramètres', 'settings', 'enregistré', 'saved', 'planificateur'
-    ]);
-    // Marqueurs de DÉBUT de la zone Équipes/canaux → on arrête la collecte.
-    const TEAMS_MARKERS = ['afficher tous les canaux', 'voir toutes vos équipes', 'show all channels', 'see all your teams'];
-    // Contrôles du bloc Discussions à ignorer (sans interrompre la collecte).
-    const CONTROL_PREFIXES = ['voir plus', 'afficher plus', 'see more'];
-
-    function norm(label) {
-      return label.toLowerCase().replace(/\s*\d+$/, '').trim();
-    }
-
-    function collectChatItems() {
-      const all = Array.from(document.querySelectorAll('[role="treeitem"]'));
-      const items = [];
-      for (const el of all) {
-        if (!visible(el)) continue;
-        if (el.querySelector('[role="treeitem"]')) continue; // en-tête de section
-        const label = (el.textContent || '').trim();
-        const low = norm(label);
-        if (label.length < 2 || NAV_LABELS.has(low)) continue;
-        if (TEAMS_MARKERS.some(m => low.startsWith(m))) break; // zone Équipes atteinte
-        if (CONTROL_PREFIXES.some(c => low.startsWith(c))) continue; // "Voir plus"…
-        if (!el.id) continue; // contrôles synthétiques sans id
-        if (!el.querySelector('img,[role="img"]')) continue; // canal (sans avatar)
-        items.push(el);
-      }
-      return items;
-    }
-
-    if (action === 'list') {
-      const items = collectChatItems();
-      return {
-        ok: items.length > 0,
-        items: items.map(it => ({
-          id: it.id,
-          label: (it.textContent || '').trim().slice(0, 80)
-        }))
-      };
-    }
-
-    // action === 'click' → arg = id
-    const it = arg ? document.getElementById(arg) : null;
-    if (!it) return { ok: false, reason: 'id not found', id: arg };
-    try { it.scrollIntoView({ block: 'center' }); } catch (e) { /* ignore */ }
-    const clickable = it.querySelector('a,button,[role="link"],[tabindex]') || it;
-    clickable.click();
-    return { ok: true, id: arg, label: (it.textContent || '').trim().slice(0, 80) };
-  }
-
-  // Clique le contrôle "Voir plus" du bloc Discussions (pour charger les
-  // discussions masquées). Renvoie { ok } selon qu'un contrôle a été trouvé.
-  function frameClickVoirPlus() {
-    function visible(el) {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
-    }
-    const TEAMS_MARKERS = ['afficher tous les canaux', 'voir toutes vos équipes', 'show all channels', 'see all your teams'];
-    const SEE_MORE = ['voir plus', 'afficher plus', 'see more'];
-    const all = Array.from(document.querySelectorAll('[role="treeitem"]'));
-    for (const el of all) {
-      if (!visible(el)) continue;
-      if (el.querySelector('[role="treeitem"]')) continue;
-      const low = (el.textContent || '').trim().toLowerCase().replace(/\s*\d+$/, '').trim();
-      if (TEAMS_MARKERS.some(m => low.startsWith(m))) break; // ne pas aller dans Équipes
-      if (SEE_MORE.some(c => low.startsWith(c))) {
-        const clickable = el.querySelector('a,button,[role="link"],[tabindex]') || el;
-        clickable.click();
-        return { ok: true, label: (el.textContent || '').trim().slice(0, 40) };
-      }
-    }
-    return { ok: false };
-  }
-
-  // Clique sur le premier élément visible dont le texte/aria correspond
-  // à l'un des mots-clés fournis (onglet récapitulatif, transcript, etc.).
-  function frameClickByKeywords(keywords) {
-    function visible(el) {
-      const r = el.getBoundingClientRect();
-      return r.width > 0 && r.height > 0;
-    }
-    const kw = keywords.map(k => k.toLowerCase());
-    const candidates = document.querySelectorAll(
-      'button,[role="tab"],[role="button"],a,[role="link"],[role="menuitem"],div[tabindex],span[tabindex]'
-    );
-    for (const el of candidates) {
-      if (!visible(el)) continue;
-      const txt = (el.textContent || '').trim().toLowerCase();
-      const aria = ((el.getAttribute && el.getAttribute('aria-label')) || '').toLowerCase();
-      if (!txt && !aria) continue;
-      // On évite les très longs textes (faux positifs sur des conteneurs)
-      const matchTxt = txt.length <= 40 && kw.some(k => txt === k || txt.includes(k));
-      const matchAria = aria.length <= 60 && kw.some(k => aria.includes(k));
-      if (matchTxt || matchAria) {
-        el.click();
-        return { ok: true, matched: (txt || aria).slice(0, 60) };
-      }
-    }
-    return { ok: false };
-  }
-
-  // ============================================================
-  // Fonctions injectées dans les frames pour l'EXTRACTION (V1)
-  // ============================================================
-
-  // Quick scan: does this frame have transcript content?
-  function frameScanForTranscript() {
-    const doc = document;
-    const bodyText = doc.body ? doc.body.textContent : '';
-
-    const timeMatches = bodyText.match(/\d{1,2}:\d{2}/g);
-    const timeCount = timeMatches ? timeMatches.length : 0;
-
-    const listCells = doc.querySelectorAll('[data-automationid="ListCell"]').length;
-    const listItems = doc.querySelectorAll('[role="listitem"]').length;
-
-    return {
-      url: window.location.href,
-      origin: window.location.origin,
-      timeCount,
-      listCells,
-      listItems,
-      bodyLength: bodyText.length,
-      hasContent: bodyText.length > 100
-    };
-  }
-
-  // Full extraction with scroll
-  function frameFullExtract() {
-    const doc = document;
-
-    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
-
-    function findContainer() {
-      for (const sel of [
-        '#scrollToTargetTargetedFocusZone',
-        '[data-tid="transcriptContainerRef"]',
-        '[data-tid="transcript-pane"]',
-        '[data-tid="transcript-content"]',
-        '.ms-List'
-      ]) {
-        const el = doc.querySelector(sel);
-        if (el) return el;
-      }
-
-      const listCells = doc.querySelectorAll('[data-automationid="ListCell"]');
-      if (listCells.length > 0) {
-        let el = listCells[0].parentElement;
-        while (el) {
-          if (el.scrollHeight > el.clientHeight && el.clientHeight > 0) return el;
-          el = el.parentElement;
-        }
-        return listCells[0].parentElement;
-      }
-
-      for (const el of doc.querySelectorAll('[role="list"]')) {
-        if (el.children.length > 2) return el;
-      }
-
-      const log = doc.querySelector('[role="log"]');
-      if (log) return log;
-
-      for (const el of doc.querySelectorAll('div')) {
-        if (el.children.length > 3 && el.scrollHeight > 200) {
-          const text = el.textContent;
-          const tm = text.match(/\d{1,2}:\d{2}/g);
-          if (tm && tm.length > 3) return el;
-        }
-      }
-
-      return null;
-    }
-
-    function extractEntryFromCell(cell) {
-      const allText = cell.textContent.trim();
-      if (!allText || allText.length < 3) return null;
-
-      const timeMatch = allText.match(/(\d{1,2}:\d{2}(?::\d{2})?)/);
-      let time = timeMatch ? timeMatch[1] : '';
-
-      let speaker = '';
-      for (const sel of [
-        '[class*="itemDisplayName"]', '[class*="displayName"]',
-        '[class*="speaker"]', '[class*="Speaker"]',
-        '[class*="author"]', '[data-tid*="speaker"]', '[data-tid*="name"]'
-      ]) {
-        const el = cell.querySelector(sel);
-        if (el && el.textContent.trim()) { speaker = el.textContent.trim(); break; }
-      }
-
-      let message = '';
-      for (const sel of [
-        '[class*="eventText"]', '[class*="message"]',
-        '[class*="caption"]', '[class*="Caption"]',
-        '[class*="text-"]', '[data-tid*="text"]', '[data-tid*="caption"]'
-      ]) {
-        const el = cell.querySelector(sel);
-        if (el && el.textContent.trim()) { message = el.textContent.trim(); break; }
-      }
-      if (!message) message = allText;
-
-      if (!speaker && message) {
-        const m = message.match(/^([A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+(?:\s+[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ]+)*)\s*[:\n]\s*/);
-        if (m) { speaker = m[1].trim(); message = message.substring(m[0].length).trim(); }
-      }
-
-      if (time && message.startsWith(time)) message = message.substring(time.length).trim();
-      if (speaker && message.startsWith(speaker)) message = message.substring(speaker.length).replace(/^[\s:]+/, '').trim();
-      message = message.replace(/^\d+\s+minute.*?\d+\s+seconde\s*/, '').trim();
-      message = message.replace(/^:\s*/, '').trim();
-
-      if (!message || message.length < 2) return null;
-      return { time: time || '--:--', speaker: speaker || 'Inconnu', message };
-    }
-
-    function collectEntries(container, seenKeys) {
-      const entries = [];
-      const cellSelectors = '[data-automationid="ListCell"], [role="listitem"]';
-      let cells = container.querySelectorAll(cellSelectors);
-      if (cells.length === 0) cells = container.children;
-
-      for (const cell of cells) {
-        const entry = extractEntryFromCell(cell);
-        if (entry) {
-          const key = entry.speaker + '|' + entry.message.substring(0, 50);
-          if (!seenKeys.has(key)) { seenKeys.add(key); entries.push(entry); }
-        }
-      }
-      return entries;
-    }
-
-    return (async () => {
-      const container = findContainer();
-      if (!container) return { found: false, reason: 'no container' };
-
-      const allEntries = [];
-      const seenKeys = new Set();
-      const initialScrollTop = container.scrollTop;
-      const isScrollable = container.scrollHeight > container.clientHeight + 50;
-
-      if (!isScrollable) {
-        const entries = collectEntries(container, seenKeys);
-        return { found: entries.length > 0, entries, scrolled: false };
-      }
-
-      let sameCount = 0;
-      let scrolls = 0;
-
-      while (scrolls < 500) {
-        const entries = collectEntries(container, seenKeys);
-        allEntries.push(...entries);
-
-        const maxScroll = container.scrollHeight - container.clientHeight;
-        if (container.scrollTop >= maxScroll - 50) {
-          sameCount++;
-          if (sameCount >= 5) break;
-        } else {
-          sameCount = 0;
-        }
-
-        container.scrollTop += 500;
-        await sleep(400);
-        scrolls++;
-      }
-
-      container.scrollTop = 0;
-      await sleep(800);
-      const finalEntries = collectEntries(container, seenKeys);
-      allEntries.push(...finalEntries);
-
-      container.scrollTop = initialScrollTop;
-
-      return { found: allEntries.length > 0, entries: allEntries, scrolled: true, scrollCount: scrolls };
-    })();
-  }
-
-  function frameGetTitle() {
-    for (const sel of ['[data-tid="chat-title"]', '[data-tid="meeting-title"]', 'h1', 'h2', '[role="heading"]']) {
-      const el = document.querySelector(sel);
-      if (el && el.textContent.trim()) return el.textContent.trim();
-    }
-    return null;
-  }
-
-  // Diagnostic : dumpe la structure réelle de la sidebar (rendue par React)
-  // pour identifier les vrais sélecteurs des éléments de discussion.
-  function frameDumpSidebar() {
-    function info(el) {
-      const cls = el.className && el.className.toString ? el.className.toString() : '';
-      return {
-        tag: el.tagName ? el.tagName.toLowerCase() : '',
-        role: el.getAttribute('role'),
-        dataTid: el.getAttribute('data-tid'),
-        id: el.id || null,
-        ariaLabel: el.getAttribute('aria-label'),
-        className: cls.slice(0, 100),
-        text: (el.textContent || '').trim().slice(0, 60)
-      };
-    }
-    const selectors = [
-      '[role="tree"]',
-      '[role="treeitem"]',
-      '[role="grid"]',
-      '[role="row"]',
-      '[role="listitem"]',
-      '[data-tid="chat-list"]',
-      '[data-tid="chatListContainer"]',
-      '[data-tid^="chat-list-item"]',
-      '[id^="chat-list-item"]',
-      '#chat-list',
-      '[aria-label]'
-    ];
-    const out = {};
-    for (const sel of selectors) {
-      let els = [];
-      try { els = Array.from(document.querySelectorAll(sel)); } catch (e) { continue; }
-      out[sel] = { count: els.length, samples: els.slice(0, 6).map(info) };
-    }
-
-    // Reproduit le filtre de frameChats pour vérifier les discussions retenues.
-    const NAV_LABELS = new Set([
-      'copilot', 'vues rapides', 'quick views', 'mentions',
-      'discussions suivies', 'discussions épinglées', 'followed chats',
-      'découverte', 'discover', 'brouillons', 'drafts',
-      'activité', 'activity', 'calendrier', 'calendar', 'appels', 'calls',
-      'fichiers', 'files', 'équipes', 'teams', 'récent', 'recent', 'favoris',
-      'favorites', 'contacts', 'applications', 'apps', 'aide', 'help',
-      'paramètres', 'settings', 'enregistré', 'saved', 'planificateur'
-    ]);
-    function vis(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
-    function isNav(label) { const t = label.toLowerCase().replace(/\s*\d+$/, '').trim(); return !t || NAV_LABELS.has(t); }
-    const leaves = Array.from(document.querySelectorAll('[role="treeitem"]')).filter(el =>
-      vis(el) && !el.querySelector('[role="treeitem"]') && (el.textContent || '').trim().length >= 2
-    );
-    out.__chatCandidates = {
-      kept: leaves.filter(el => !isNav((el.textContent || '').trim()))
-        .map(el => ({ id: el.id || null, hasImg: !!el.querySelector('img,[role="img"]'), label: (el.textContent || '').trim().slice(0, 60) })),
-      excludedAsNav: leaves.filter(el => isNav((el.textContent || '').trim()))
-        .map(el => (el.textContent || '').trim().slice(0, 40))
-    };
-    return out;
-  }
-
-  // ============================================================
-  // Helpers d'injection
-  // ============================================================
-
-  async function runInFrame(tabId, frameId, func, args) {
-    const opts = { target: { tabId, frameIds: [frameId] }, func };
-    if (args !== undefined) opts.args = args;
-    const results = await chrome.scripting.executeScript(opts);
-    return results && results[0] ? results[0].result : undefined;
-  }
-
-  // Tente une action (clic par mots-clés) sur toutes les frames de l'onglet
-  // jusqu'à la première réussite. Renvoie le résultat ou {ok:false}.
-  async function clickAcrossFrames(tabId, keywords) {
-    const frames = await chrome.webNavigation.getAllFrames({ tabId });
-    for (const frame of frames) {
-      try {
-        const res = await runInFrame(tabId, frame.frameId, frameClickByKeywords, [keywords]);
-        if (res && res.ok) return { ...res, frameId: frame.frameId, frameUrl: frame.url };
-      } catch (e) {
-        // frame non scriptable (cross-origin sans permission) : on ignore
-      }
-    }
-    return { ok: false };
-  }
-
-  // Trouve la meilleure frame contenant le transcript (scan heuristique V1).
-  async function findTranscriptFrame(tabId) {
-    const frames = await chrome.webNavigation.getAllFrames({ tabId });
-    let bestFrame = null;
-    let bestScore = 0;
-    for (const frame of frames) {
-      try {
-        const r = await runInFrame(tabId, frame.frameId, frameScanForTranscript);
-        if (!r) continue;
-        const score = r.timeCount + r.listCells * 5 + r.listItems * 5;
-        if (score > bestScore && r.hasContent) {
-          bestScore = score;
-          bestFrame = { frameId: frame.frameId, frameUrl: frame.url, ...r };
-        }
-      } catch (e) { /* frame non scriptable */ }
-    }
-    return { bestFrame, bestScore };
-  }
-
-  // Extraction complète dans la frame ciblée + titre depuis la frame principale.
-  async function extractFromFrame(tabId, bestFrame) {
-    const extractResult = await runInFrame(tabId, bestFrame.frameId, frameFullExtract);
-    let entries = [];
-    if (extractResult && extractResult.found) entries = extractResult.entries;
-
-    let title = 'Meeting Transcript';
-    try {
-      const t = await runInFrame(tabId, 0, frameGetTitle);
-      if (t) title = t;
-    } catch (e) { /* ignore */ }
-
-    return { title, entries };
-  }
-
-  // ============================================================
-  // Orchestration AUTOMATIQUE — scan de TOUTES les discussions
-  // ============================================================
-
-  const MAX_CHATS = 250; // garde-fou (after "Voir plus", la liste peut être longue)
-  const MAX_EXPAND = 20; // nombre max de clics sur "Voir plus"
-
-  // Déplie le bloc Discussions en cliquant "Voir plus" jusqu'à épuisement,
-  // afin de charger les discussions masquées avant le scan.
-  async function expandChatList(tabId) {
-    for (let i = 0; i < MAX_EXPAND; i++) {
-      let res;
-      try { res = await runInFrame(tabId, 0, frameClickVoirPlus); } catch (e) { break; }
-      if (!res || !res.ok) break;
-      showStatus(`Chargement des discussions… (${i + 1})`, 'loading');
-      await sleepMs(1500);
-    }
-  }
-
-  // Tente d'ouvrir récapitulatif + transcript puis d'extraire le transcript
-  // de la discussion actuellement ouverte. Renvoie {title, entries} ou null.
-  // Skip rapide : si ni récapitulatif ni transcript ne sont cliquables, la
-  // discussion n'a pas de transcript → on n'attend pas inutilement.
-  async function tryExtractCurrent(tabId, tabUrl) {
-    const recap = await clickAcrossFrames(tabId, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
-    if (recap.ok) await sleepMs(3000);
-
-    const transcript = await clickAcrossFrames(tabId, ['transcript', 'transcription']);
-    if (transcript.ok) {
-      await sleepMs(3000);
-    } else if (!recap.ok) {
-      return null; // ni récap ni transcript → skip rapide
-    }
-
-    const { bestFrame, bestScore } = await findTranscriptFrame(tabId);
-    if (!bestFrame || bestScore < 3) return null;
-
-    const { title, entries } = await extractFromFrame(tabId, bestFrame);
-    if (!entries.length) return null;
-
-    return { title, date: new Date().toISOString(), entries, url: tabUrl };
-  }
-
-  async function autoScanAll() {
-    if (!autoSwitch.checked) {
-      showStatus('Activez l\'automatisation pour lancer le scan.', 'error');
-      return;
-    }
-
-    const isTeams = await checkTeamsTab();
-    if (!isTeams) {
-      showStatus('Veuillez ouvrir Microsoft Teams dans un onglet', 'error');
-      return;
-    }
-
-    autoBtn.disabled = true;
-    extractBtn.disabled = true;
-    autoSwitch.disabled = true;
-
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-      // Déplie "Voir plus" pour charger toutes les discussions masquées
-      await expandChatList(tab.id);
-
-      // Énumère toutes les discussions de la sidebar
-      showStatus('Lecture des discussions…', 'loading');
-      const list = await runInFrame(tab.id, 0, frameChats, ['list', null]);
-      console.log('chat list:', list);
-
-      if (!list || !list.ok || !list.items.length) {
-        showStatus('Aucune discussion trouvée dans la sidebar Teams.', 'error');
-        return;
-      }
-
-      const items = list.items.slice(0, MAX_CHATS);
-      const total = items.length;
-      const seenTitles = new Set();
-      let downloaded = 0;
-
-      for (let i = 0; i < total; i++) {
-        const label = items[i].label || `discussion ${i + 1}`;
-        showStatus(`Discussion ${i + 1}/${total} : ${label}`, 'loading');
-
-        // Ouvre la discussion par son id (robuste aux re-rendus)
-        const clickRes = await runInFrame(tab.id, 0, frameChats, ['click', items[i].id]);
-        if (!clickRes || !clickRes.ok) {
-          console.log(`skip ${label}: click failed`, clickRes);
-          continue;
-        }
-        await sleepMs(2500);
-
-        // Tente d'extraire un transcript pour cette discussion
-        const transcript = await tryExtractCurrent(tab.id, tab.url);
-        if (!transcript) {
-          console.log(`no transcript for "${label}"`);
-          continue;
-        }
-
-        // Déduplication par titre + nombre d'entrées
-        const key = `${transcript.title}|${transcript.entries.length}`;
-        if (seenTitles.has(key)) {
-          console.log(`duplicate transcript skipped: ${key}`);
-          continue;
-        }
-        seenTitles.add(key);
-
-        currentTranscript = transcript;
-        formatPreview(currentTranscript);
-        previewContainer.classList.remove('hidden');
-        downloadOptions.classList.remove('hidden');
-
-        // Téléchargement direct du .txt dans le dossier Téléchargements
-        downloadTxt(false);
-        downloaded++;
-        showStatus(`Téléchargé : ${transcript.title} (${transcript.entries.length} entrées) — ${downloaded} au total`, 'loading');
-      }
-
-      if (downloaded === 0) {
-        showStatus(`${total} discussions scannées, aucun transcript trouvé.`, 'error');
-      } else {
-        showStatus(`Terminé : ${downloaded} transcript(s) téléchargé(s) sur ${total} discussions scannées.`, 'success');
-      }
-
-    } catch (error) {
-      console.error('Auto-scan error:', error);
-      showStatus('Erreur: ' + error.message, 'error');
-    } finally {
-      autoBtn.disabled = !autoSwitch.checked;
-      extractBtn.disabled = false;
-      autoSwitch.disabled = false;
-    }
-  }
-
-  // ============================================================
-  // Extraction MANUELLE (comportement V1, secours)
-  // ============================================================
-
-  async function extractTranscript() {
-    const isTeams = await checkTeamsTab();
-    if (!isTeams) {
-      showStatus('Veuillez ouvrir Microsoft Teams dans un onglet', 'error');
-      return;
-    }
-
-    showStatus('Recherche du transcript…', 'loading');
-    extractBtn.disabled = true;
-    autoBtn.disabled = true;
-
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-
-      const { bestFrame, bestScore } = await findTranscriptFrame(tab.id);
-
-      if (!bestFrame || bestScore < 3) {
-        showStatus('Aucun transcript trouvé. Ouvrez le panneau Transcript dans Teams.', 'error');
-        console.log('Best frame:', bestFrame, 'Best score:', bestScore);
-        return;
-      }
-
-      showStatus(`Transcript trouvé dans ${bestFrame.origin}. Extraction en cours…`, 'loading');
-
-      const { title, entries } = await extractFromFrame(tab.id, bestFrame);
-
-      if (entries.length === 0) {
-        showStatus('Conteneur trouvé mais aucune entrée extraite.', 'error');
-        return;
-      }
-
-      currentTranscript = { title, date: new Date().toISOString(), entries, url: tab.url };
-
-      showStatus(`Transcript extrait : ${entries.length} entrées`, 'success');
-      formatPreview(currentTranscript);
-      previewContainer.classList.remove('hidden');
-      downloadOptions.classList.remove('hidden');
-
-    } catch (error) {
-      console.error('Extraction error:', error);
-      showStatus('Erreur: ' + error.message, 'error');
-    } finally {
-      extractBtn.disabled = false;
-      autoBtn.disabled = false;
-    }
-  }
-
-  // ============================================================
-  // Debug
-  // ============================================================
-
-  async function debugDOM() {
-    try {
-      const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-      const frames = await chrome.webNavigation.getAllFrames({ tabId: tab.id });
-
-      const report = { tabUrl: tab.url, frameCount: frames.length, frames: [] };
-
-      for (const frame of frames) {
-        const frameInfo = {
-          frameId: frame.frameId,
-          parentFrameId: frame.parentFrameId,
-          url: frame.url,
-          type: frame.frameType || 'unknown'
-        };
-
-        try {
-          const r = await runInFrame(tab.id, frame.frameId, frameScanForTranscript);
-          if (r) frameInfo.scan = r;
-        } catch (e) {
-          frameInfo.scanError = e.message;
-        }
-
-        report.frames.push(frameInfo);
-      }
-
-      // Dump de la sidebar (frame principale) pour identifier les vrais
-      // sélecteurs des éléments de discussion.
-      try {
-        report.sidebar = await runInFrame(tab.id, 0, frameDumpSidebar);
-      } catch (e) {
-        report.sidebarError = e.message;
-      }
-
-      const dataStr = JSON.stringify(report, null, 2);
-      const blob = new Blob([dataStr], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      chrome.downloads.download({ url, filename: 'teams-dom-debug.json', saveAs: true });
-      showStatus(`Debug: ${frames.length} frames inspectés`, 'success');
-    } catch (error) {
-      showStatus('Debug error: ' + error.message, 'error');
-    }
-  }
-
-  // ============================================================
-  // Téléchargements (V2 : direct dans Téléchargements par défaut)
-  // ============================================================
-
-  function downloadJson(saveAs = false) {
-    if (!currentTranscript) return;
-    const dataStr = JSON.stringify(currentTranscript, null, 2);
-    const blob = new Blob([dataStr], { type: 'application/json' });
-    const url = URL.createObjectURL(blob);
-    chrome.downloads.download({
-      url, filename: `transcript-${sanitizeFilename(currentTranscript.title)}-${formatDate()}.json`, saveAs
-    });
-  }
-
-  function downloadTxt(saveAs = false) {
-    if (!currentTranscript) return;
-
-    const formattedEntries = [];
-    let curSpeaker = null, curMessage = '';
-
-    currentTranscript.entries.forEach((entry, i) => {
-      const speaker = entry.speaker || 'Inconnu';
-      if (speaker === curSpeaker && entry.time === '--:--') {
-        curMessage += ' ' + entry.message;
-      } else {
-        if (curSpeaker !== null) {
-          formattedEntries.push({
-            time: currentTranscript.entries[i - 1]?.time || '',
-            speaker: curSpeaker, message: curMessage.trim()
-          });
-        }
-        curSpeaker = speaker;
-        curMessage = entry.message;
-      }
-    });
-    if (curSpeaker !== null) {
-      formattedEntries.push({
-        time: currentTranscript.entries[currentTranscript.entries.length - 1]?.time || '',
-        speaker: curSpeaker, message: curMessage.trim()
+  function send(type, extra = {}) {
+    return new Promise(resolve => {
+      chrome.runtime.sendMessage({ type, ...extra }, resp => {
+        void chrome.runtime.lastError; // ignore "no receiver" si SW redémarre
+        resolve(resp);
       });
-    }
-
-    const lines = [
-      `Transcript: ${currentTranscript.title}`,
-      `Date: ${new Date(currentTranscript.date).toLocaleString()}`,
-      `URL: ${currentTranscript.url}`, '',
-      '========================================', '',
-      ...formattedEntries.map(e => {
-        const t = e.time ? `[${e.time}] ` : '';
-        return `${t}${e.speaker}: ${e.message}`;
-      }),
-      '', '========================================',
-      `Total: ${formattedEntries.length} entrées`
-    ];
-
-    const blob = new Blob([lines.join('\n')], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    chrome.downloads.download({
-      url, filename: `transcript-${sanitizeFilename(currentTranscript.title)}-${formatDate()}.txt`, saveAs
     });
   }
 
-  function sanitizeFilename(name) {
-    return name.replace(/[^a-z0-9\-_]/gi, '_').toLowerCase();
-  }
+  // ---- Rendu de l'état ----
 
-  function formatDate() {
-    const d = new Date();
-    return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
-  }
+  function render(state) {
+    const running = !!(state && state.running);
+    autoBtn.classList.toggle('hidden', running);
+    stopBtn.classList.toggle('hidden', !running);
+    extractBtn.disabled = running;
 
-  // ============================================================
-  // Switch d'automatisation (état persistant)
-  // ============================================================
-
-  async function onSwitchChange() {
-    const enabled = autoSwitch.checked;
-    try { await chrome.storage.local.set({ autoEnabled: enabled }); } catch (e) { /* ignore */ }
-    autoBtn.disabled = !enabled;
-    if (enabled) {
-      // Si actif, on lance automatiquement le scan de toutes les discussions.
-      autoScanAll();
-    } else {
-      showStatus('Automatisation désactivée. Utilisez "Extraire manuellement".', 'info');
-    }
-  }
-
-  // Event listeners
-  autoSwitch.addEventListener('change', onSwitchChange);
-  autoBtn.addEventListener('click', autoScanAll);
-  extractBtn.addEventListener('click', extractTranscript);
-  // Boutons de format : téléchargement direct (V2). Maj+clic = boîte de dialogue.
-  downloadJsonBtn.addEventListener('click', (e) => downloadJson(e.shiftKey));
-  downloadTxtBtn.addEventListener('click', (e) => downloadTxt(e.shiftKey));
-  document.getElementById('debug-btn').addEventListener('click', debugDOM);
-
-  // Initialisation : restaure l'état du switch puis vérifie l'onglet Teams.
-  (async () => {
-    let enabled = false;
-    try {
-      const stored = await chrome.storage.local.get('autoEnabled');
-      enabled = !!stored.autoEnabled;
-    } catch (e) { /* ignore */ }
-    autoSwitch.checked = enabled;
-    autoBtn.disabled = !enabled;
-
-    const isTeams = await checkTeamsTab();
-    if (!isTeams) {
-      showStatus('Veuillez ouvrir Microsoft Teams', 'error');
-      autoBtn.disabled = true;
-      extractBtn.disabled = true;
+    if (!state || !state.phase) {
+      showStatus('Prêt. Activez l\'automatisation ou cliquez sur « Scanner maintenant ».', 'info');
+      progressWrap.classList.add('hidden');
       return;
     }
 
-    if (enabled) {
-      showStatus('Automatisation activée. Cliquez sur "Scanner toutes les discussions".', 'info');
+    showStatus(state.message || state.phase, PHASE_TYPE[state.phase] || 'info');
+
+    if (running && state.total > 0) {
+      progressWrap.classList.remove('hidden');
+      const pct = Math.min(100, Math.round((state.current / state.total) * 100));
+      progressBar.style.width = pct + '%';
     } else {
-      showStatus('Activez l\'automatisation pour scanner toutes les discussions.', 'info');
+      progressWrap.classList.add('hidden');
     }
-  })();
+  }
+
+  async function refresh() {
+    const { scanState } = await chrome.storage.local.get('scanState');
+    render(scanState);
+  }
+
+  // Mise à jour live quand le service worker écrit l'état.
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.scanState) render(changes.scanState.newValue);
+  });
+
+  // ---- Réglages ----
+
+  async function loadSettings() {
+    const { autoEnabled, maxChats } = await chrome.storage.local.get(['autoEnabled', 'maxChats']);
+    autoSwitch.checked = !!autoEnabled;
+    maxChatsInput.value = Number.isFinite(maxChats) ? maxChats : 50;
+  }
+
+  autoSwitch.addEventListener('change', async () => {
+    const enabled = autoSwitch.checked;
+    await chrome.storage.local.set({ autoEnabled: enabled });
+    await send('autoEnabledChanged', { enabled });
+    if (!enabled) showStatus('Automatisation désactivée.', 'info');
+  });
+
+  maxChatsInput.addEventListener('change', async () => {
+    let v = parseInt(maxChatsInput.value, 10);
+    if (!Number.isFinite(v) || v < 0) v = 50;
+    if (v > 500) v = 500;
+    maxChatsInput.value = v;
+    await chrome.storage.local.set({ maxChats: v });
+  });
+
+  // ---- Actions ----
+
+  autoBtn.addEventListener('click', () => send('start'));
+  stopBtn.addEventListener('click', () => send('stop'));
+  extractBtn.addEventListener('click', () => send('extractManual'));
+  debugBtn.addEventListener('click', async () => {
+    showStatus('Debug en cours…', 'loading');
+    const resp = await send('debug');
+    if (resp && resp.ok) showStatus(`Debug : ${resp.frames} frames (teams-dom-debug.json téléchargé).`, 'success');
+    else showStatus('Debug : erreur.', 'error');
+  });
+
+  // ---- Init ----
+  loadSettings();
+  refresh();
 });

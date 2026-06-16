@@ -138,3 +138,23 @@
 - Outcome : success — feature V2 livrée et validée.
 - Next : aucune action en attente. Branche `feature/v2-auto-download` prête à
   être mergée (V1 inchangée dans v1/, V2 dans v2/).
+
+## 2026-06-16 16:30 — agent (Claude)
+
+- Action : V2 refonte arrière-plan. Service worker `background.js` (toute
+  l'orchestration) ; popup = télécommande (messages + rendu de `scanState`).
+  Onglet Teams ciblé sans focus (scripting par tabId) ; traitement popup
+  fermée ; onglet Teams dédié auto (perms `tabs`,`alarms`) ; nb discussions
+  paramétrable (défaut 50, 0=toutes) ; bouton Arrêter (`stopRequested`) ;
+  download via data: URL (pas de Blob en SW). Manifest 2.0.0 → 2.1.0.
+  Boucle d'automatisation : précision utilisateur → démarrage IMMÉDIAT à
+  l'activation/au démarrage navigateur, pause 1 min ENTRE deux scans
+  (re-scan en boucle). Stop annule la prochaine itération.
+- Fichiers : `v2/background.js` (créé), `v2/popup.{html,js,css}`,
+  `v2/manifest.json`, `.github/workflows/release.yml`, `README.md`,
+  `.prompt-hub/version.md` (0.1.4 → 0.1.5), `.prompt-hub/releases.md`.
+- Validation : `node --check` OK (background, popup), manifest JSON valide.
+- Outcome : success. À valider en réel (SW longévité sur scan 50, boucle,
+  onglet dédié, arrêt).
+- Next : commit `feat(v2): background service worker, loop, stop, settings`
+  puis push.

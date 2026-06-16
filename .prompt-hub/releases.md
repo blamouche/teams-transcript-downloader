@@ -1,5 +1,27 @@
 # Releases
 
+## 0.1.5 — 2026-06-16
+
+- **V2 / passage en arrière-plan** (manifest extension 2.0.0 → 2.1.0). Toute
+  l'orchestration migre dans un **service worker** (`background.js`) :
+  - le traitement **continue popup fermée** ;
+  - l'onglet Teams ciblé **n'a pas besoin d'être actif** (scripting par `tabId`),
+    travail en parallèle possible sur d'autres onglets ;
+  - **onglet Teams dédié** ouvert automatiquement (non actif) si absent
+    (réutilisé sinon ; oublié à sa fermeture) ;
+  - **nombre de discussions paramétrable** (défaut 50, `0` = toutes) ;
+  - **bouton Arrêter** (drapeau `stopRequested` vérifié à chaque itération) ;
+  - **boucle d'automatisation** : démarrage **immédiat** à l'activation et au
+    démarrage du navigateur, puis **pause d'1 min entre deux scans** avant de
+    relancer (`chrome.alarms`) ; **Arrêter** annule la prochaine itération ;
+    keep-alive du SW pendant les longs scans.
+- Téléchargement via **`data:` URL** (le SW n'a pas `URL.createObjectURL`).
+- La popup devient une **télécommande** : messages (start/stop/extractManual/
+  debug/autoEnabledChanged) au SW + rendu de l'état lu dans `chrome.storage`
+  (clé `scanState`), barre de progression, mise à jour live.
+- Nouvelles permissions V2 : `tabs`, `alarms`. Workflow release : copie
+  conditionnelle de `background.js` dans le zip V2.
+
 ## 0.1.4 — 2026-06-16
 
 - **V2 / scan fiabilisé** (2e debug réel). Le bloc Discussions est isolé

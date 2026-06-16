@@ -38,6 +38,8 @@ jobs:
             cp "${V}/popup.html" "${STAGE}/"
             cp "${V}/popup.css" "${STAGE}/"
             cp "${V}/popup.js" "${STAGE}/"
+            # background.js n'existe que pour les versions avec service worker (V2)
+            if [ -f "${V}/background.js" ]; then cp "${V}/background.js" "${STAGE}/"; fi
             cp "${V}/icons/icon16.png" "${V}/icons/icon48.png" "${V}/icons/icon128.png" "${STAGE}/icons/"
             echo "Contenu du package ${V} :"
             find "${STAGE}" -type f | sort
