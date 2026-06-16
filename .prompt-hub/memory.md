@@ -275,6 +275,19 @@
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.
 
+## 2026-06-16 20:52 — agent (Claude)
+
+- Action : Correction du retour à l’état de base quand l’utilisateur clique sur
+  « Arrêter » pendant un scan. L’état idle est désormais forcé immédiatement
+  dans le service worker (`resetToIdleState`) au lieu d’attendre la fin de
+  l’opération en cours.
+- Fichiers modifiés : `v2/background.js` (`resetToIdleState`, handler `stop`),
+  `.prompt-hub/version.md` (0.1.15 → 0.1.16), `.prompt-hub/releases.md`,
+  `.prompt-hub/todo/todo-20260616-205200-stop-back-to-idle.md`.
+- Validation : `node --check v2/background.js` + `v2/popup.js` OK ; manifest JSON valide.
+- Outcome : success.
+- Next : commit `feat(v2): reset to idle state immediately on stop` puis push.
+
 ## 2026-06-16 20:47 — agent (Claude)
 
 - Action : Masquage des boutons de debug « Debug DOM » et « Debug réunion » dans

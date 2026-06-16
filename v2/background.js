@@ -39,6 +39,21 @@ async function setState(partial) {
   return next;
 }
 
+// Force un retour à l’état de base (idle / prêt) en ignorant les états de scan
+// en cours. Appelé lors d’un arrêt manuel pour que la popup repasse immédiatement
+// au statut initial sans attendre la fin d’une opération longue.
+async function resetToIdleState(message = 'Prêt.') {
+  await setState({
+    running: false,
+    phase: 'idle',
+    current: 0,
+    total: 0,
+    currentLabel: '',
+    nextRunAt: null,
+    message
+  });
+}
+
 // ============================================================
 // Icône de l'action + pastille de statut (actif / en cours / arrêté)
 // ============================================================
@@ -853,7 +868,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'stop':
         stopRequested = true;
         await cancelAutoStart(); // n'enchaîne pas le prochain scan de la boucle
-        await setState({ message: 'Arrêt demandé…' });
+        await resetToIdleState('Arrêté. Prêt pour un prochain scan.');
         sendResponse({ ok: true });
         break;
       case 'extractManual':

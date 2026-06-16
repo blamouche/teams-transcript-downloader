@@ -1,5 +1,15 @@
 # Releases
 
+## 0.1.16 — 2026-06-16
+
+- **V2 / UX : retour immédiat à l’état de base sur arrêt manuel**. Avant,
+  cliquer sur « Arrêter » pendant un scan laissait la popup sur un message
+  intermédiaire (« Arrêt demandé… ») jusqu’à la fin de l’opération en cours,
+  qui peut être longue (ouverture de réunion + extraction). Désormais le
+  service worker force immédiatement un état `idle` (running=false, phase=idle,
+  compteurs réinitialisés) ; le scan s’arrête en arrière-plan dès qu’il atteint
+  son prochain point de contrôle, sans écraser l’état de base affiché.
+
 ## 0.1.15 — 2026-06-16
 
 - **V2 / UI : masquage des boutons de debug**. Les boutons « Debug DOM » et
