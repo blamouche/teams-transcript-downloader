@@ -57,3 +57,19 @@
 - Outcome : success (sélecteurs d'automatisation Teams à valider en conditions
   réelles — implémentation défensive avec repli manuel).
 - Next : commit `feat: add V2 with automatic transcript download` puis push.
+
+## 2026-06-16 14:30 — agent (Claude)
+
+- Action : V2 — ajout d'un switch d'automatisation (persistant,
+  `chrome.storage.local`, permission `storage`). Actif → scan de TOUTES les
+  discussions de la sidebar Teams via `frameChats('list'|'click', i)` ;
+  pour chacune, `tryExtractCurrent` ouvre recap + transcript, extrait et
+  télécharge le `.txt` (`saveAs:false`). Déduplication titre+nb entrées,
+  plafond 50. Remplacement de `autoDownload`/`frameClickMeeting` par
+  `autoScanAll`. Activer le switch lance le scan immédiatement.
+- Fichiers : `v2/popup.html`, `v2/popup.css`, `v2/popup.js`,
+  `v2/manifest.json` (+ permission storage), `README.md`,
+  `.prompt-hub/version.md` (0.1.0 → 0.1.1), `.prompt-hub/releases.md`.
+- Validation : `node --check` OK, manifest JSON valide, pas de réf morte.
+- Outcome : success (sélecteurs Teams toujours à valider en réel).
+- Next : commit `feat(v2): add automation switch to scan all chats` puis push.

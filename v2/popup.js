@@ -14,6 +14,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   const autoBtn = document.getElementById('auto-btn');
+  const autoSwitch = document.getElementById('auto-switch');
   const extractBtn = document.getElementById('extract-btn');
   const downloadJsonBtn = document.getElementById('download-json');
   const downloadTxtBtn = document.getElementById('download-txt');
@@ -73,17 +74,16 @@ document.addEventListener('DOMContentLoaded', () => {
   // Fonctions injectées dans les frames pour l'AUTOMATISATION
   // ============================================================
 
-  // Cherche et clique sur une discussion de type "meeting" dans la sidebar.
-  function frameClickMeeting() {
+  // Énumère ou clique les discussions de la sidebar Teams.
+  //   action === 'list'  → renvoie { ok, items: [{index, label}] }
+  //   action === 'click' → clique la discussion à l'index donné
+  // Une seule fonction (injectée) pour garantir la même stratégie de sélection
+  // entre l'énumération et le clic (indices stables).
+  function frameChats(action, index) {
     function visible(el) {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     }
-
-    const keywords = [
-      'réunion', 'reunion', 'meeting', 'recap', 'récapitulatif',
-      'recapitulatif', 'appel', 'call', 'visio'
-    ];
 
     // Conteneurs/items possibles de la liste de discussions Teams
     const itemSelectors = [
@@ -100,38 +100,32 @@ document.addEventListener('DOMContentLoaded', () => {
     let items = [];
     for (const sel of itemSelectors) {
       const found = document.querySelectorAll(sel);
-      if (found.length) { items = Array.from(found); break; }
-    }
-
-    if (items.length === 0) {
-      return { ok: false, reason: 'no chat items', itemCount: 0 };
-    }
-
-    // Cherche un item qui ressemble à une réunion : mots-clés dans le texte
-    // ou l'aria-label, ou présence d'une icône de réunion/calendrier.
-    let target = null;
-    for (const it of items) {
-      if (!visible(it)) continue;
-      const txt = (it.textContent || '').toLowerCase();
-      const aria = (it.getAttribute('aria-label') || '').toLowerCase();
-      const hasIcon = it.querySelector(
-        '[class*="meeting"],[class*="calendar"],[class*="Meeting"],' +
-        '[data-tid*="meeting"],[data-tid*="calendar"],' +
-        '[aria-label*="réunion" i],[aria-label*="meeting" i]'
-      );
-      if (keywords.some(k => txt.includes(k) || aria.includes(k)) || hasIcon) {
-        target = it;
-        break;
+      if (found.length) {
+        items = Array.from(found).filter(visible);
+        if (items.length) break;
       }
     }
 
-    if (!target) {
-      return { ok: false, reason: 'no meeting-like item', itemCount: items.length };
+    if (items.length === 0) {
+      return { ok: false, reason: 'no chat items', items: [] };
     }
 
-    const clickable = target.querySelector('a,button,[role="link"],[tabindex]') || target;
+    if (action === 'list') {
+      return {
+        ok: true,
+        items: items.map((it, i) => ({
+          index: i,
+          label: (it.textContent || '').trim().slice(0, 80)
+        }))
+      };
+    }
+
+    // action === 'click'
+    const it = items[index];
+    if (!it) return { ok: false, reason: 'index out of range', count: items.length };
+    const clickable = it.querySelector('a,button,[role="link"],[tabindex]') || it;
     clickable.click();
-    return { ok: true, label: (target.textContent || '').trim().slice(0, 80) };
+    return { ok: true, label: (it.textContent || '').trim().slice(0, 80) };
   }
 
   // Clique sur le premier élément visible dont le texte/aria correspond
@@ -405,10 +399,37 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // ============================================================
-  // Orchestration AUTOMATIQUE
+  // Orchestration AUTOMATIQUE — scan de TOUTES les discussions
   // ============================================================
 
-  async function autoDownload() {
+  const MAX_CHATS = 50; // garde-fou contre les listes très longues
+
+  // Tente d'ouvrir récapitulatif + transcript puis d'extraire le transcript
+  // de la discussion actuellement ouverte. Renvoie {title, entries} ou null.
+  async function tryExtractCurrent(tabId, tabUrl) {
+    // Ouvrir le récapitulatif de réunion (si présent)
+    await clickAcrossFrames(tabId, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
+    await sleepMs(2500);
+
+    // Ouvrir l'onglet Transcript (si présent)
+    await clickAcrossFrames(tabId, ['transcript', 'transcription']);
+    await sleepMs(2500);
+
+    const { bestFrame, bestScore } = await findTranscriptFrame(tabId);
+    if (!bestFrame || bestScore < 3) return null;
+
+    const { title, entries } = await extractFromFrame(tabId, bestFrame);
+    if (!entries.length) return null;
+
+    return { title, date: new Date().toISOString(), entries, url: tabUrl };
+  }
+
+  async function autoScanAll() {
+    if (!autoSwitch.checked) {
+      showStatus('Activez l\'automatisation pour lancer le scan.', 'error');
+      return;
+    }
+
     const isTeams = await checkTeamsTab();
     if (!isTeams) {
       showStatus('Veuillez ouvrir Microsoft Teams dans un onglet', 'error');
@@ -417,64 +438,76 @@ document.addEventListener('DOMContentLoaded', () => {
 
     autoBtn.disabled = true;
     extractBtn.disabled = true;
+    autoSwitch.disabled = true;
 
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
-      // Étape 1 : ouvrir une discussion de type meeting dans la sidebar
-      showStatus('1/4 — Recherche d\'une discussion de réunion…', 'loading');
-      const meetingRes = await runInFrame(tab.id, 0, frameClickMeeting);
-      console.log('frameClickMeeting:', meetingRes);
-      if (!meetingRes || !meetingRes.ok) {
-        showStatus('Aucune discussion de réunion trouvée dans la sidebar. Ouvrez-la manuellement puis utilisez "Extraire manuellement".', 'error');
-        return;
-      }
-      await sleepMs(2500);
+      // Énumère toutes les discussions de la sidebar
+      showStatus('Lecture des discussions…', 'loading');
+      const list = await runInFrame(tab.id, 0, frameChats, ['list', 0]);
+      console.log('chat list:', list);
 
-      // Étape 2 : ouvrir le récapitulatif de réunion
-      showStatus('2/4 — Ouverture du récapitulatif…', 'loading');
-      const recapRes = await clickAcrossFrames(tab.id, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
-      console.log('open recap:', recapRes);
-      await sleepMs(3000);
-
-      // Étape 3 : cliquer sur l'onglet Transcript
-      showStatus('3/4 — Ouverture du transcript…', 'loading');
-      const transcriptRes = await clickAcrossFrames(tab.id, ['transcript', 'transcription']);
-      console.log('open transcript:', transcriptRes);
-      await sleepMs(3000);
-
-      // Étape 4 : extraction + téléchargement
-      showStatus('4/4 — Extraction du transcript…', 'loading');
-      const { bestFrame, bestScore } = await findTranscriptFrame(tab.id);
-      console.log('best frame:', bestFrame, 'score:', bestScore);
-
-      if (!bestFrame || bestScore < 3) {
-        showStatus('Transcript introuvable après navigation. Vérifiez que le panneau Transcript est ouvert, puis utilisez "Extraire manuellement".', 'error');
+      if (!list || !list.ok || !list.items.length) {
+        showStatus('Aucune discussion trouvée dans la sidebar Teams.', 'error');
         return;
       }
 
-      const { title, entries } = await extractFromFrame(tab.id, bestFrame);
-      if (entries.length === 0) {
-        showStatus('Panneau trouvé mais aucune entrée extraite.', 'error');
-        return;
+      const total = Math.min(list.items.length, MAX_CHATS);
+      const seenTitles = new Set();
+      let downloaded = 0;
+
+      for (let i = 0; i < total; i++) {
+        const label = list.items[i].label || `discussion ${i + 1}`;
+        showStatus(`Discussion ${i + 1}/${total} : ${label}`, 'loading');
+
+        // Ouvre la i-ème discussion
+        const clickRes = await runInFrame(tab.id, 0, frameChats, ['click', i]);
+        if (!clickRes || !clickRes.ok) {
+          console.log(`skip ${i}: click failed`, clickRes);
+          continue;
+        }
+        await sleepMs(2500);
+
+        // Tente d'extraire un transcript pour cette discussion
+        const transcript = await tryExtractCurrent(tab.id, tab.url);
+        if (!transcript) {
+          console.log(`no transcript for "${label}"`);
+          continue;
+        }
+
+        // Déduplication par titre + nombre d'entrées
+        const key = `${transcript.title}|${transcript.entries.length}`;
+        if (seenTitles.has(key)) {
+          console.log(`duplicate transcript skipped: ${key}`);
+          continue;
+        }
+        seenTitles.add(key);
+
+        currentTranscript = transcript;
+        formatPreview(currentTranscript);
+        previewContainer.classList.remove('hidden');
+        downloadOptions.classList.remove('hidden');
+
+        // Téléchargement direct du .txt dans le dossier Téléchargements
+        downloadTxt(false);
+        downloaded++;
+        showStatus(`Téléchargé : ${transcript.title} (${transcript.entries.length} entrées) — ${downloaded} au total`, 'loading');
       }
 
-      currentTranscript = { title, date: new Date().toISOString(), entries, url: tab.url };
-
-      formatPreview(currentTranscript);
-      previewContainer.classList.remove('hidden');
-      downloadOptions.classList.remove('hidden');
-
-      // Téléchargement direct du .txt dans le dossier Téléchargements
-      downloadTxt(false);
-      showStatus(`Transcript téléchargé : ${entries.length} entrées (.txt dans Téléchargements)`, 'success');
+      if (downloaded === 0) {
+        showStatus(`${total} discussions scannées, aucun transcript trouvé.`, 'error');
+      } else {
+        showStatus(`Terminé : ${downloaded} transcript(s) téléchargé(s) sur ${total} discussions scannées.`, 'success');
+      }
 
     } catch (error) {
-      console.error('Auto-download error:', error);
+      console.error('Auto-scan error:', error);
       showStatus('Erreur: ' + error.message, 'error');
     } finally {
-      autoBtn.disabled = false;
+      autoBtn.disabled = !autoSwitch.checked;
       extractBtn.disabled = false;
+      autoSwitch.disabled = false;
     }
   }
 
@@ -639,19 +672,53 @@ document.addEventListener('DOMContentLoaded', () => {
     return `${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}`;
   }
 
+  // ============================================================
+  // Switch d'automatisation (état persistant)
+  // ============================================================
+
+  async function onSwitchChange() {
+    const enabled = autoSwitch.checked;
+    try { await chrome.storage.local.set({ autoEnabled: enabled }); } catch (e) { /* ignore */ }
+    autoBtn.disabled = !enabled;
+    if (enabled) {
+      // Si actif, on lance automatiquement le scan de toutes les discussions.
+      autoScanAll();
+    } else {
+      showStatus('Automatisation désactivée. Utilisez "Extraire manuellement".', 'info');
+    }
+  }
+
   // Event listeners
-  autoBtn.addEventListener('click', autoDownload);
+  autoSwitch.addEventListener('change', onSwitchChange);
+  autoBtn.addEventListener('click', autoScanAll);
   extractBtn.addEventListener('click', extractTranscript);
   // Boutons de format : téléchargement direct (V2). Maj+clic = boîte de dialogue.
   downloadJsonBtn.addEventListener('click', (e) => downloadJson(e.shiftKey));
   downloadTxtBtn.addEventListener('click', (e) => downloadTxt(e.shiftKey));
   document.getElementById('debug-btn').addEventListener('click', debugDOM);
 
-  checkTeamsTab().then(isTeams => {
+  // Initialisation : restaure l'état du switch puis vérifie l'onglet Teams.
+  (async () => {
+    let enabled = false;
+    try {
+      const stored = await chrome.storage.local.get('autoEnabled');
+      enabled = !!stored.autoEnabled;
+    } catch (e) { /* ignore */ }
+    autoSwitch.checked = enabled;
+    autoBtn.disabled = !enabled;
+
+    const isTeams = await checkTeamsTab();
     if (!isTeams) {
       showStatus('Veuillez ouvrir Microsoft Teams', 'error');
       autoBtn.disabled = true;
       extractBtn.disabled = true;
+      return;
     }
-  });
+
+    if (enabled) {
+      showStatus('Automatisation activée. Cliquez sur "Scanner toutes les discussions".', 'info');
+    } else {
+      showStatus('Activez l\'automatisation pour scanner toutes les discussions.', 'info');
+    }
+  })();
 });

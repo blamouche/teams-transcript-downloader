@@ -13,9 +13,22 @@
       <p class="subtitle">Téléchargement automatique des transcripts</p>
     </header>
 
+    <div class="settings">
+      <label class="switch-row" for="auto-switch">
+        <span class="switch-label">
+          Automatisation
+          <small>Scanner toutes les discussions Teams</small>
+        </span>
+        <span class="switch">
+          <input type="checkbox" id="auto-switch">
+          <span class="slider"></span>
+        </span>
+      </label>
+    </div>
+
     <div id="status-container" class="status-container">
       <div id="status-message" class="status-message">
-        Cliquez sur "Télécharger automatiquement" pour lancer le processus
+        Activez l'automatisation pour scanner toutes les discussions
       </div>
     </div>
 
@@ -29,9 +42,9 @@
     </div>
 
     <div class="actions">
-      <button id="auto-btn" class="btn btn-primary">
+      <button id="auto-btn" class="btn btn-primary" disabled>
         <span class="icon">⚡</span>
-        Télécharger automatiquement
+        Scanner toutes les discussions
       </button>
 
       <button id="extract-btn" class="btn btn-secondary" style="margin-top:10px;">

@@ -9,7 +9,7 @@ Le dépôt fournit **deux versions** complètes de l'extension, dans deux dossie
 | Version | Dossier | Fonctionnement |
 |---|---|---|
 | **V1** | [`v1/`](v1/) | Extraction **manuelle** : on ouvre soi-même le panneau Transcript dans Teams, puis on clique sur *Extraire*. |
-| **V2** | [`v2/`](v2/) | Tout V1 **+ navigation automatique** : en un clic, l'extension ouvre une discussion de réunion, le récapitulatif, l'onglet Transcript, extrait et télécharge le `.txt` directement dans le dossier Téléchargements. Le bouton manuel de la V1 reste disponible en secours. |
+| **V2** | [`v2/`](v2/) | Tout V1 **+ automatisation** : un switch active le scan de **toutes les discussions** de l'onglet Teams ; pour chacune, l'extension ouvre le récapitulatif et l'onglet Transcript, puis télécharge le `.txt` directement dans le dossier Téléchargements. Le bouton manuel de la V1 reste disponible en secours. |
 
 La V1 reste strictement inchangée. La V2 est un sur-ensemble.
 
@@ -19,14 +19,18 @@ La version web de Microsoft Teams affiche les transcripts de réunions mais n'of
 
 ### V2 — téléchargement automatique
 
-La V2 ajoute une orchestration de navigation dans Teams. Au clic sur **« Télécharger automatiquement »**, elle enchaîne :
+La V2 ajoute un **switch d'automatisation** (état persistant via `chrome.storage.local`) et une orchestration de navigation dans Teams.
 
-1. recherche d'une discussion de type *meeting* dans la sidebar (mots-clés fr/en + icônes réunion) et ouverture ;
-2. ouverture du **récapitulatif de réunion** ;
-3. clic sur l'onglet **Transcript** ;
-4. extraction (même moteur que la V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements (`saveAs:false`, sans boîte de dialogue).
+Quand le switch **Automatisation** est activé, la V2 **scanne toutes les discussions** de la sidebar de l'onglet Teams ouvert pour y trouver les transcripts. Pour chaque discussion :
 
-Si une étape échoue (DOM Teams modifié, discussion introuvable…), un message l'indique et le bouton **« Extraire manuellement »** prend le relais avec le comportement de la V1.
+1. ouverture de la discussion (parcours par index, stable) ;
+2. tentative d'ouverture du **récapitulatif de réunion** ;
+3. tentative de clic sur l'onglet **Transcript** ;
+4. si un transcript est détecté, extraction (même moteur que la V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements (`saveAs:false`, sans boîte de dialogue).
+
+Les discussions sans transcript sont ignorées, les transcripts en double (même titre + même nombre d'entrées) ne sont téléchargés qu'une fois, et le scan est plafonné à 50 discussions. Activer le switch lance immédiatement le scan ; le bouton **« Scanner toutes les discussions »** permet de le relancer.
+
+Si l'automatisation est désactivée (ou en cas d'échec), le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur le panneau Transcript déjà ouvert.
 
 ## Installation
 
@@ -70,8 +74,9 @@ Si une étape échoue (DOM Teams modifié, discussion introuvable…), un messag
 
 1. Ouvrez Microsoft Teams dans Chrome (inutile d'ouvrir une réunion au préalable).
 2. Cliquez sur l'icône de l'extension.
-3. Cliquez sur **« Télécharger automatiquement »** : l'extension ouvre la discussion de réunion, le récapitulatif, l'onglet Transcript, extrait et télécharge le `.txt` dans Téléchargements.
-4. En cas d'échec d'une étape, ouvrez vous-même le panneau Transcript et utilisez **« Extraire manuellement »**.
+3. Activez le switch **Automatisation** : le scan de toutes les discussions démarre aussitôt (l'état est mémorisé). Le bouton **« Scanner toutes les discussions »** permet de relancer.
+4. L'extension parcourt chaque discussion, ouvre le récapitulatif et l'onglet Transcript, et télécharge dans Téléchargements le `.txt` de chaque discussion contenant un transcript.
+5. Si une discussion n'a pas de transcript, elle est ignorée. En cas d'échec global, ouvrez vous-même le panneau Transcript et utilisez **« Extraire manuellement »**.
    - Astuce : sur les boutons **JSON** / **TXT**, **Maj+clic** force la boîte de dialogue « Enregistrer sous ».
 
 ## Architecture technique
@@ -229,6 +234,7 @@ Déclarées dans [`manifest.json`](manifest.json) :
 | `scripting` | Injecter `frameScanForTranscript` / `frameFullExtract` / `frameGetTitle` via `chrome.scripting.executeScript`. |
 | `downloads` | Déclencher le téléchargement des fichiers JSON/TXT/debug. |
 | `webNavigation` | Appeler `chrome.webNavigation.getAllFrames` pour énumérer les iframes (nécessaire pour *Recap*). |
+| `storage` *(V2)* | Mémoriser l'état du switch *Automatisation* (`chrome.storage.local`). |
 | `host_permissions: <all_urls>` | Pouvoir cibler les iframes *Recap* servies depuis des origines Microsoft variables. |
 
 Matchers des content scripts : `https://teams.microsoft.com/*` et `https://teams.cloud.microsoft/*` (`run_at: document_idle`).

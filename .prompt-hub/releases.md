@@ -1,5 +1,19 @@
 # Releases
 
+## 0.1.1 — 2026-06-16
+
+- **V2** : ajout d'un **switch d'automatisation** (état persistant via
+  `chrome.storage.local`, permission `storage` ajoutée). Quand il est actif, la
+  V2 **scanne toutes les discussions** de la sidebar Teams (parcours par index)
+  et, pour chacune, ouvre le récapitulatif, l'onglet Transcript, extrait et
+  télécharge le `.txt` directement dans Téléchargements. Déduplication par
+  titre + nombre d'entrées, garde-fou à 50 discussions. Activer le switch lance
+  immédiatement le scan ; le bouton « Scanner toutes les discussions » relance.
+- Remplacement de l'orchestration single-meeting (`autoDownload`,
+  `frameClickMeeting`) par le scan par lot (`autoScanAll`, `frameChats`,
+  `tryExtractCurrent`).
+- `README.md` mis à jour (switch, scan multi-discussions, permission `storage`).
+
 ## 0.1.0 — 2026-06-16
 
 - Nouvelle branche `feature/v2-auto-download` : gestion de **deux versions** du
