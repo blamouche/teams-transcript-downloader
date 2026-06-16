@@ -1,5 +1,23 @@
 # Releases
 
+## 0.1.0 — 2026-06-16
+
+- Nouvelle branche `feature/v2-auto-download` : gestion de **deux versions** du
+  plugin côte à côte dans le dépôt.
+- Restructuration : les fichiers du plugin V1 (contenu **inchangé**) sont
+  déplacés dans `v1/`.
+- **V2** (`v2/`) : extension distincte (manifest `2.0.0`) qui ajoute le
+  téléchargement automatique des transcripts Teams. En un clic
+  (« Télécharger automatiquement »), elle : (1) cherche et ouvre une discussion
+  de type *meeting* dans la sidebar, (2) ouvre le récapitulatif de réunion,
+  (3) clique sur l'onglet Transcript, (4) extrait (moteur V1) puis télécharge le
+  `.txt` directement dans le dossier Téléchargements (`saveAs:false`).
+  Le bouton « Extraire manuellement » conserve le comportement V1 en secours.
+- Workflow `release.yml` : package désormais **deux** zips
+  (`...-v1-<tag>.zip` et `...-v2-<tag>.zip`).
+- `README.md` : section *Deux versions*, instructions d'installation/usage par
+  version, structure mise à jour, section *Release* adaptée.
+
 ## 0.0.3 — 2026-05-19
 
 - `README.md` : ajout d'une sous-section *Depuis une release GitHub

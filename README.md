@@ -2,9 +2,31 @@
 
 Extension Chrome (Manifest V3) pour télécharger les transcripts de réunions Microsoft Teams (y compris via l'interface **Recap**) au format JSON ou TXT.
 
+## Deux versions
+
+Le dépôt fournit **deux versions** complètes de l'extension, dans deux dossiers distincts. On charge l'une ou l'autre dans Chrome selon l'usage souhaité.
+
+| Version | Dossier | Fonctionnement |
+|---|---|---|
+| **V1** | [`v1/`](v1/) | Extraction **manuelle** : on ouvre soi-même le panneau Transcript dans Teams, puis on clique sur *Extraire*. |
+| **V2** | [`v2/`](v2/) | Tout V1 **+ navigation automatique** : en un clic, l'extension ouvre une discussion de réunion, le récapitulatif, l'onglet Transcript, extrait et télécharge le `.txt` directement dans le dossier Téléchargements. Le bouton manuel de la V1 reste disponible en secours. |
+
+La V1 reste strictement inchangée. La V2 est un sur-ensemble.
+
 ## Description
 
 La version web de Microsoft Teams affiche les transcripts de réunions mais n'offre pas de bouton de téléchargement natif. Cette extension scanne automatiquement la page et ses iframes (notamment celles de la vue *Recap*), extrait chaque ligne du transcript (heure, orateur, message) puis propose un export en JSON structuré ou en TXT lisible.
+
+### V2 — téléchargement automatique
+
+La V2 ajoute une orchestration de navigation dans Teams. Au clic sur **« Télécharger automatiquement »**, elle enchaîne :
+
+1. recherche d'une discussion de type *meeting* dans la sidebar (mots-clés fr/en + icônes réunion) et ouverture ;
+2. ouverture du **récapitulatif de réunion** ;
+3. clic sur l'onglet **Transcript** ;
+4. extraction (même moteur que la V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements (`saveAs:false`, sans boîte de dialogue).
+
+Si une étape échoue (DOM Teams modifié, discussion introuvable…), un message l'indique et le bouton **« Extraire manuellement »** prend le relais avec le comportement de la V1.
 
 ## Installation
 
@@ -12,7 +34,9 @@ La version web de Microsoft Teams affiche les transcripts de réunions mais n'of
 
 1. Rendez-vous sur la page des releases :
    [github.com/blamouche/teams-transcript-downloader/releases](https://github.com/blamouche/teams-transcript-downloader/releases).
-2. Téléchargez l'archive `teams-transcript-downloader-vX.Y.Z.zip` de la dernière release.
+2. Téléchargez l'archive souhaitée de la dernière release :
+   `teams-transcript-downloader-v1-vX.Y.Z.zip` (manuelle) ou
+   `teams-transcript-downloader-v2-vX.Y.Z.zip` (automatique).
 3. Décompressez l'archive dans un dossier de votre choix.
 4. Ouvrez Chrome à l'adresse `chrome://extensions/`.
 5. Activez le **Mode développeur** (toggle en haut à droite).
@@ -25,7 +49,8 @@ La version web de Microsoft Teams affiche les transcripts de réunions mais n'of
 2. Ouvrez Chrome à l'adresse `chrome://extensions/`.
 3. Activez le **Mode développeur** (toggle en haut à droite).
 4. Cliquez sur **« Charger l'extension non empaquetée »**.
-5. Sélectionnez le dossier racine du projet.
+5. Sélectionnez le dossier **`v1/`** (version manuelle) ou **`v2/`** (version
+   automatique) selon la version voulue.
 
 ### Chrome Web Store
 
@@ -33,11 +58,21 @@ La version web de Microsoft Teams affiche les transcripts de réunions mais n'of
 
 ## Utilisation
 
+**V1 (manuelle)**
+
 1. Ouvrez Microsoft Teams (`teams.microsoft.com` ou `teams.cloud.microsoft`) dans Chrome.
 2. Accédez à la réunion et affichez le transcript (vue *Recap* ou panneau Transcript).
 3. Cliquez sur l'icône de l'extension dans la barre d'outils.
 4. Cliquez sur **« Extraire le transcript »** — l'extension scanne automatiquement les iframes et choisit celle qui contient le transcript.
 5. Vérifiez l'aperçu, puis téléchargez au format **JSON** ou **TXT**.
+
+**V2 (automatique)**
+
+1. Ouvrez Microsoft Teams dans Chrome (inutile d'ouvrir une réunion au préalable).
+2. Cliquez sur l'icône de l'extension.
+3. Cliquez sur **« Télécharger automatiquement »** : l'extension ouvre la discussion de réunion, le récapitulatif, l'onglet Transcript, extrait et télécharge le `.txt` dans Téléchargements.
+4. En cas d'échec d'une étape, ouvrez vous-même le panneau Transcript et utilisez **« Extraire manuellement »**.
+   - Astuce : sur les boutons **JSON** / **TXT**, **Maj+clic** force la boîte de dialogue « Enregistrer sous ».
 
 ## Architecture technique
 
@@ -163,16 +198,26 @@ Le bouton **Debug DOM** du popup déclenche `debugDOM()` : pour chaque frame, il
 ## Structure du projet
 
 ```
-├── manifest.json      # Manifest V3 : permissions, matchers, action, content_scripts
-├── content.js         # Content script minimaliste (ping)
-├── popup.html         # UI du popup
-├── popup.css          # Styles (thème Teams)
-├── popup.js           # Orchestration + fonctions injectées (scan, extract, title, debug)
-├── icons/             # Icônes de l'extension (16/48/128 + SVG)
+├── v1/                # Version 1 — extraction manuelle (inchangée)
+│   ├── manifest.json  # Manifest V3 : permissions, matchers, action, content_scripts
+│   ├── content.js     # Content script minimaliste (ping)
+│   ├── popup.html     # UI du popup
+│   ├── popup.css      # Styles (thème Teams)
+│   ├── popup.js       # Orchestration + fonctions injectées (scan, extract, title, debug)
+│   └── icons/         # Icônes de l'extension (16/48/128 + SVG)
+├── v2/                # Version 2 — navigation automatique (sur-ensemble de V1)
+│   ├── manifest.json  # Manifest V3 (version 2.0.0, nom distinct)
+│   ├── content.js
+│   ├── popup.html     # UI : bouton auto + bouton manuel
+│   ├── popup.css
+│   ├── popup.js       # V1 + orchestration auto (sidebar → recap → transcript) + download direct
+│   └── icons/
 ├── README.md
-├── .github/workflows/ # Workflows GitHub Actions (release automatique)
+├── .github/workflows/ # Workflows GitHub Actions (release automatique des 2 versions)
 └── .prompt-hub/       # Mémoire, lessons, version, releases (workflow prompt-hub)
 ```
+
+Les chemins de code cités plus bas (`popup.js`, `manifest.json`, …) existent à l'identique dans `v1/` et `v2/` ; la logique d'extraction décrite est commune aux deux. La V2 ajoute en plus les fonctions d'orchestration `frameClickMeeting`, `frameClickByKeywords`, `clickAcrossFrames` et `autoDownload`.
 
 ## Permissions
 
@@ -215,26 +260,27 @@ La publication des releases est entièrement automatisée par le workflow
 
 ### Déclencher une release
 
-1. Mettre à jour la version dans [`manifest.json`](manifest.json) si nécessaire.
+1. Mettre à jour la version dans `v1/manifest.json` / `v2/manifest.json` si nécessaire.
 2. Créer un tag versionné (préfixe `v`) et le pousser :
    ```bash
-   git tag v1.0.1
-   git push origin v1.0.1
+   git tag v2.0.0
+   git push origin v2.0.0
    ```
 3. Le workflow GitHub Actions s'exécute automatiquement :
-   - construit un dossier temporaire ne contenant que les fichiers nécessaires
-     à l'extension (`manifest.json`, `content.js`, `popup.html`, `popup.css`,
-     `popup.js`, `icons/icon{16,48,128}.png`),
-   - le zippe sous `teams-transcript-downloader-<tag>.zip`,
-   - crée une release GitHub portant le nom du tag, avec le zip en asset et des
-     notes de release auto-générées (`generate_release_notes`).
+   - construit, pour **chaque version**, un dossier temporaire ne contenant que
+     les fichiers nécessaires à l'extension (`manifest.json`, `content.js`,
+     `popup.html`, `popup.css`, `popup.js`, `icons/icon{16,48,128}.png`),
+   - les zippe sous `teams-transcript-downloader-v1-<tag>.zip` et
+     `teams-transcript-downloader-v2-<tag>.zip`,
+   - crée une release GitHub portant le nom du tag, avec les deux zips en assets
+     et des notes de release auto-générées (`generate_release_notes`).
 
-### Contenu du zip
+### Contenu des zips
 
-Le zip ne contient **que** les fichiers exécutables par Chrome. Sont exclus :
-documentation, `.prompt-hub/`, `.github/`, fichiers `*.md`, `CLAUDE.md`,
-`agents.md`. Il peut être chargé tel quel via `chrome://extensions/` → *Charger
-l'extension non empaquetée*.
+Chaque zip ne contient **que** les fichiers exécutables par Chrome de sa
+version (`v1/` ou `v2/`). Sont exclus : documentation, `.prompt-hub/`,
+`.github/`, fichiers `*.md`, `CLAUDE.md`, `agents.md`. Il peut être chargé tel
+quel via `chrome://extensions/` → *Charger l'extension non empaquetée*.
 
 ## Limitations connues
 

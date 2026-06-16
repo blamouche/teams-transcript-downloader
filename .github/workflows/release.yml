@@ -24,27 +24,31 @@ jobs:
           VERSION="${TAG#v}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "zip_name=teams-transcript-downloader-${TAG}.zip" >> "$GITHUB_OUTPUT"
+          echo "zip_v1=teams-transcript-downloader-v1-${TAG}.zip" >> "$GITHUB_OUTPUT"
+          echo "zip_v2=teams-transcript-downloader-v2-${TAG}.zip" >> "$GITHUB_OUTPUT"
 
       - name: Stage plugin files
         run: |
           set -euo pipefail
-          STAGE="dist/teams-transcript-downloader"
-          mkdir -p "${STAGE}/icons"
-          cp manifest.json "${STAGE}/"
-          cp content.js "${STAGE}/"
-          cp popup.html "${STAGE}/"
-          cp popup.css "${STAGE}/"
-          cp popup.js "${STAGE}/"
-          cp icons/icon16.png icons/icon48.png icons/icon128.png "${STAGE}/icons/"
-          echo "Contenu du package :"
-          find "${STAGE}" -type f | sort
+          for V in v1 v2; do
+            STAGE="dist/teams-transcript-downloader-${V}"
+            mkdir -p "${STAGE}/icons"
+            cp "${V}/manifest.json" "${STAGE}/"
+            cp "${V}/content.js" "${STAGE}/"
+            cp "${V}/popup.html" "${STAGE}/"
+            cp "${V}/popup.css" "${STAGE}/"
+            cp "${V}/popup.js" "${STAGE}/"
+            cp "${V}/icons/icon16.png" "${V}/icons/icon48.png" "${V}/icons/icon128.png" "${STAGE}/icons/"
+            echo "Contenu du package ${V} :"
+            find "${STAGE}" -type f | sort
+          done
 
-      - name: Create zip archive
+      - name: Create zip archives
         run: |
           set -euo pipefail
           cd dist
-          zip -r "../${{ steps.vars.outputs.zip_name }}" teams-transcript-downloader
+          zip -r "../${{ steps.vars.outputs.zip_v1 }}" teams-transcript-downloader-v1
+          zip -r "../${{ steps.vars.outputs.zip_v2 }}" teams-transcript-downloader-v2
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -52,4 +56,6 @@ jobs:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: ${{ steps.vars.outputs.tag }}
           generate_release_notes: true
-          files: ${{ steps.vars.outputs.zip_name }}
+          files: |
+            ${{ steps.vars.outputs.zip_v1 }}
+            ${{ steps.vars.outputs.zip_v2 }}

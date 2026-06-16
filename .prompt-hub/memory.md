@@ -37,3 +37,23 @@
 - Outcome : success.
 - Next : commit `docs: link to GitHub releases in install instructions` puis
   push.
+
+## 2026-06-16 14:00 — agent (Claude)
+
+- Action : Création de la branche `feature/v2-auto-download` pour gérer deux
+  versions du plugin. Déplacement des fichiers V1 (inchangés) dans `v1/`.
+  Création de la V2 (`v2/`, manifest 2.0.0) = logique V1 + orchestration de
+  navigation automatique dans Teams (sidebar meeting → récapitulatif →
+  transcript) + téléchargement direct du `.txt` (`saveAs:false`). Conservation
+  d'un bouton d'extraction manuelle de secours. Mise à jour de `release.yml`
+  (deux zips v1/v2) et du `README.md`.
+- Décisions utilisateur : dossiers v1/v2 séparés ; mode auto + manuel ;
+  téléchargement direct dans Téléchargements.
+- Fichiers : `v1/*` (déplacés), `v2/manifest.json`, `v2/popup.html`,
+  `v2/popup.js`, `v2/popup.css`, `v2/content.js`, `v2/icons/*` (créés),
+  `.github/workflows/release.yml`, `README.md`, `.prompt-hub/version.md`
+  (0.0.3 → 0.1.0), `.prompt-hub/releases.md`,
+  `.prompt-hub/todo/todo-20260616-140000-v2-auto-download.md` (créé).
+- Outcome : success (sélecteurs d'automatisation Teams à valider en conditions
+  réelles — implémentation défensive avec repli manuel).
+- Next : commit `feat: add V2 with automatic transcript download` puis push.
