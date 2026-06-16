@@ -35,8 +35,77 @@ async function setState(partial) {
   const cur = (await chrome.storage.local.get('scanState')).scanState || {};
   const next = { ...cur, ...partial, updatedAt: Date.now() };
   await chrome.storage.local.set({ scanState: next });
+  updateActionUI(next).catch(() => {});
   return next;
 }
+
+// ============================================================
+// Icône de l'action + pastille de statut (actif / en cours / arrêté)
+// ============================================================
+
+function roundRectPath(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+// Dessine une icône « transcript » (document à lignes) sur fond violet Teams.
+function makeIconImageData(size) {
+  const c = new OffscreenCanvas(size, size);
+  const x = c.getContext('2d');
+  const r = size / 128;
+  // fond arrondi
+  x.fillStyle = '#6264a7';
+  roundRectPath(x, 0, 0, size, size, 28 * r);
+  x.fill();
+  // page blanche
+  x.fillStyle = '#ffffff';
+  roundRectPath(x, 34 * r, 24 * r, 60 * r, 84 * r, 8 * r);
+  x.fill();
+  // lignes de transcript
+  x.fillStyle = '#6264a7';
+  const lx = 44 * r, lw = 40 * r, lh = 7 * r;
+  [42, 60, 78, 96].forEach((yy, i) => {
+    roundRectPath(x, lx, yy * r, i === 3 ? lw * 0.55 : lw, lh, 3 * r);
+    x.fill();
+  });
+  return x.getImageData(0, 0, size, size);
+}
+
+function setAppIcon() {
+  try {
+    const imageData = {
+      16: makeIconImageData(16),
+      32: makeIconImageData(32),
+      48: makeIconImageData(48),
+      128: makeIconImageData(128)
+    };
+    chrome.action.setIcon({ imageData });
+  } catch (e) { /* OffscreenCanvas indisponible : on garde l'icône PNG du manifest */ }
+}
+
+// Pastille : ● violet = en cours, ● vert = actif (auto en attente),
+// ■ rouge = arrêté, rien = automatisation désactivée.
+async function updateActionUI(state) {
+  try {
+    const st = state || (await chrome.storage.local.get('scanState')).scanState || {};
+    const { autoEnabled } = await getSettings();
+    let text = '', color = '#6264a7';
+    if (st.running) { text = '●'; color = '#6264a7'; }
+    else if (st.phase === 'stopped') { text = '■'; color = '#c62828'; }
+    else if (autoEnabled) { text = '●'; color = '#2e7d32'; }
+    await chrome.action.setBadgeText({ text });
+    if (text) await chrome.action.setBadgeBackgroundColor({ color });
+  } catch (e) { /* ignore */ }
+}
+
+// Initialisation à chaque réveil du service worker.
+setAppIcon();
+updateActionUI().catch(() => {});
 
 // ============================================================
 // Fonctions injectées dans les frames (identiques côté logique à la V1/V2)
@@ -804,6 +873,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         } else {
           await cancelAutoStart();
         }
+        await updateActionUI();
         sendResponse({ ok: true });
         break;
       case 'debug': {

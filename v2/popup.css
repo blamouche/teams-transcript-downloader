@@ -210,6 +210,30 @@ header h1 {
   border-bottom: 1px solid #e9ecef;
 }
 
+.status-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.status-line .status-message {
+  flex: 1;
+}
+
+.loader {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: 3px solid #d7daf0;
+  border-top-color: #6264a7;
+  border-radius: 50%;
+  animation: ttd-spin 0.8s linear infinite;
+}
+
+@keyframes ttd-spin {
+  to { transform: rotate(360deg); }
+}
+
 .status-message {
   padding: 12px;
   border-radius: 6px;

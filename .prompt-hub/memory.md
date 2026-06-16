@@ -274,3 +274,17 @@
   `.prompt-hub/version.md` (0.1.11 → 0.1.12), `.prompt-hub/releases.md`.
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.
+
+## 2026-06-16 19:25 — agent (Claude)
+
+- Action : Retours visuels. (1) Loader spinner popup pendant `running`.
+  (2) Pas de convertisseur SVG sur la machine (rsvg/convert/inkscape absents,
+  sips raster only) → icône dessinée à la volée dans le SW via OffscreenCanvas
+  + `chrome.action.setIcon` (doc à lignes, fond violet, 16/32/48/128).
+  (3) Pastille `chrome.action.setBadgeText` : ● violet en cours, ● vert actif,
+  ■ rouge arrêté, vide si auto OFF ; `updateActionUI` appelé dans `setState` +
+  sur autoEnabledChanged + init SW. Extension 2.4.2 → 2.5.0.
+- Fichiers : `v2/background.js`, `v2/popup.{html,js,css}`, `v2/manifest.json`,
+  `README.md`, `.prompt-hub/version.md` (0.1.12 → 0.1.13), `.prompt-hub/releases.md`.
+- Validation : `node --check` OK.
+- Next : commit `feat(v2): loader, runtime icon, status badge` puis push.

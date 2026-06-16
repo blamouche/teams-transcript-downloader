@@ -1,5 +1,19 @@
 # Releases
 
+## 0.1.13 — 2026-06-16
+
+- **V2 / retours visuels** (extension 2.4.2 → 2.5.0).
+  - **Loader** (spinner animé) dans la popup pendant tout le scan
+    (`state.running`).
+  - **Nouvelle icône** dessinée à la volée dans le service worker
+    (`OffscreenCanvas` + `chrome.action.setIcon`) : document à lignes
+    (« transcript ») sur fond violet Teams — pas de convertisseur SVG dispo, donc
+    rendu programmatique 16/32/48/128.
+  - **Pastille de statut** sur l'icône via `chrome.action.setBadgeText` :
+    ● violet = scan en cours, ● vert = automatisation active (en attente),
+    ■ rouge = arrêté, rien = automatisation désactivée. Mise à jour à chaque
+    changement d'état (`updateActionUI` appelé dans `setState`).
+
 ## 0.1.12 — 2026-06-16
 
 - **V2 / bilan de fin persistant** (extension 2.4.1 → 2.4.2). Le message de

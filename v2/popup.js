@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const progressWrap = document.getElementById('progress-wrap');
   const progressBar = document.getElementById('progress-bar');
   const summaryEl = document.getElementById('summary');
+  const loaderEl = document.getElementById('loader');
 
   const PHASE_TYPE = {
     idle: 'info', opening: 'loading', expanding: 'loading', scanning: 'loading',
@@ -69,6 +70,7 @@ document.addEventListener('DOMContentLoaded', () => {
     autoBtn.classList.toggle('hidden', running);
     stopBtn.classList.toggle('hidden', !running);
     extractBtn.disabled = running;
+    loaderEl.classList.toggle('hidden', !running); // loader pendant le scan
     stopCountdown();
 
     // Bilan persistant (survit au compte à rebours entre deux scans).
