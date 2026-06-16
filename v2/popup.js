@@ -9,6 +9,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const meetingsOnlySwitch = document.getElementById('meetings-only');
   const maxChatsInput = document.getElementById('max-chats');
   const intervalInput = document.getElementById('interval-min');
+  const autoDesc = document.getElementById('auto-desc');
   const autoBtn = document.getElementById('auto-btn');
   const stopBtn = document.getElementById('stop-btn');
   const extractBtn = document.getElementById('extract-btn');
@@ -63,6 +64,11 @@ document.addEventListener('DOMContentLoaded', () => {
       ${t ? `<div class="summary-time">Terminé à ${t}</div>` : ''}
     `;
     summaryEl.classList.remove('hidden');
+  }
+
+  function updateAutoDesc(intervalMin) {
+    const mins = Number.isFinite(intervalMin) && intervalMin >= 1 ? intervalMin : 5;
+    if (autoDesc) autoDesc.textContent = `Démarre tout de suite, puis re-scan toutes les ${mins} min`;
   }
 
   function render(state) {
@@ -126,6 +132,7 @@ document.addEventListener('DOMContentLoaded', () => {
     meetingsOnlySwitch.checked = meetingsOnly ?? true;
     maxChatsInput.value = Number.isFinite(maxChats) ? maxChats : 50;
     intervalInput.value = Number.isFinite(intervalMin) && intervalMin >= 1 ? intervalMin : 5;
+    updateAutoDesc(intervalMin);
   }
 
   meetingsOnlySwitch.addEventListener('change', async () => {
@@ -137,6 +144,7 @@ document.addEventListener('DOMContentLoaded', () => {
     if (!Number.isFinite(v) || v < 1) v = 1;
     if (v > 240) v = 240;
     intervalInput.value = v;
+    updateAutoDesc(v);
     await chrome.storage.local.set({ intervalMin: v });
   });
 

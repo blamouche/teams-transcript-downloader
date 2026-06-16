@@ -1,5 +1,14 @@
 # Releases
 
+## 0.1.14 — 2026-06-16
+
+- **V2 / libellé d’automatisation dynamique** (extension inchangée 2.5.0). Le
+  texte sous le switch « Automatisation » affichait systématiquement
+  « re-scan toutes les 1 min » alors que l’intervalle paramétrable est de 5 min
+  par défaut. Le libellé est désormais mis à jour dynamiquement en fonction de
+  `intervalMin`, à l’ouverture de la popup et à chaque modification du champ
+  « Intervalle entre scans ».
+
 ## 0.1.13 — 2026-06-16
 
 - **V2 / retours visuels** (extension 2.4.2 → 2.5.0).

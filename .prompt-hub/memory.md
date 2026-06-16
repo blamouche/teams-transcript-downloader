@@ -275,6 +275,17 @@
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.
 
+## 2026-06-16 20:42 — agent (Claude)
+
+- Action : Adaptation du libellé sous le switch « Automatisation » pour refléter
+  la durée paramétrée `intervalMin` au lieu d’afficher statiquement « 1 min ».
+- Fichiers modifiés : `v2/popup.html` (`id="auto-desc"`), `v2/popup.js`
+  (`updateAutoDesc`), `.prompt-hub/version.md` (0.1.13 → 0.1.14),
+  `.prompt-hub/releases.md`, `.prompt-hub/todo/todo-20260616-204230-dynamic-interval-label.md`.
+- Validation : `node --check v2/popup.js` + `v2/background.js` OK ; manifest JSON valide.
+- Outcome : success.
+- Next : commit `feat(v2): dynamic automation label from intervalMin` puis push.
+
 ## 2026-06-16 19:25 — agent (Claude)
 
 - Action : Retours visuels. (1) Loader spinner popup pendant `running`.
