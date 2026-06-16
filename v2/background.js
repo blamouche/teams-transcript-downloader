@@ -12,7 +12,7 @@
 // La popup n'est qu'une télécommande : elle envoie des messages
 // (start/stop/extractManual/debug) et lit l'état via chrome.storage.
 
-const DEFAULTS = { autoEnabled: false, maxChats: 50 };
+const DEFAULTS = { autoEnabled: false, maxChats: 50, meetingsOnly: true };
 const TEAMS_URL = 'https://teams.microsoft.com/v2/';
 const RESCAN_DELAY_MIN = 1; // pause entre deux scans (boucle d'automatisation)
 
@@ -23,10 +23,11 @@ let isRunning = false;
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function getSettings() {
-  const s = await chrome.storage.local.get(['autoEnabled', 'maxChats']);
+  const s = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly']);
   return {
     autoEnabled: s.autoEnabled ?? DEFAULTS.autoEnabled,
-    maxChats: Number.isFinite(s.maxChats) ? s.maxChats : DEFAULTS.maxChats
+    maxChats: Number.isFinite(s.maxChats) ? s.maxChats : DEFAULTS.maxChats,
+    meetingsOnly: s.meetingsOnly ?? DEFAULTS.meetingsOnly
   };
 }
 
@@ -191,7 +192,7 @@ function frameGetTitle() {
   return null;
 }
 
-function frameChats(action, arg) {
+function frameChats(action, arg, meetingsOnly) {
   function visible(el) {
     const r = el.getBoundingClientRect();
     return r.width > 0 && r.height > 0;
@@ -209,7 +210,14 @@ function frameChats(action, arg) {
   const CONTROL_PREFIXES = ['voir plus', 'afficher plus', 'see more'];
   function norm(label) { return label.toLowerCase().replace(/\s*\d+$/, '').trim(); }
 
-  function collectChatItems() {
+  // Signatures DOM observées (debug réel) :
+  //   - personne (1:1) : [data-tid="PersonaAvatar"] (+ presence-badge) ;
+  //   - groupe         : photo <img>, sans icône svg ;
+  //   - réunion        : icône générique span.fui-Avatar__icon (svg), sans PersonaAvatar.
+  function isPerson(el) { return !!el.querySelector('[data-tid="PersonaAvatar"]'); }
+  function isMeeting(el) { return !!el.querySelector('.fui-Avatar__icon') && !isPerson(el); }
+
+  function collectChatItems(onlyMeetings) {
     const all = Array.from(document.querySelectorAll('[role="treeitem"]'));
     const items = [];
     for (const el of all) {
@@ -221,14 +229,19 @@ function frameChats(action, arg) {
       if (TEAMS_MARKERS.some(m => low.startsWith(m))) break;
       if (CONTROL_PREFIXES.some(c => low.startsWith(c))) continue;
       if (!el.id) continue;
-      if (!el.querySelector('img,[role="img"]')) continue;
+      if (onlyMeetings) {
+        if (!isMeeting(el)) continue;
+      } else {
+        // tout chat : personne, groupe (photo) ou réunion (icône)
+        if (!(isPerson(el) || isMeeting(el) || el.querySelector('img'))) continue;
+      }
       items.push(el);
     }
     return items;
   }
 
   if (action === 'list') {
-    const items = collectChatItems();
+    const items = collectChatItems(!!meetingsOnly);
     return { ok: items.length > 0, items: items.map(it => ({ id: it.id, label: (it.textContent || '').trim().slice(0, 80) })) };
   }
   const it = arg ? document.getElementById(arg) : null;
@@ -515,7 +528,7 @@ async function startScan(reason = 'manual') {
   startKeepAlive();
 
   try {
-    const { maxChats } = await getSettings();
+    const { maxChats, meetingsOnly } = await getSettings();
     await setState({ running: true, phase: 'opening', current: 0, total: 0, downloaded: 0, currentLabel: '', message: 'Ouverture de Teams…', reason });
 
     const tabId = await ensureTeamsTab();
@@ -529,9 +542,9 @@ async function startScan(reason = 'manual') {
     await expandChatList(tabId);
     if (stopRequested) { await setState({ running: false, phase: 'stopped', message: 'Arrêté.' }); return; }
 
-    const list = await runInFrame(tabId, 0, frameChats, ['list', null]);
+    const list = await runInFrame(tabId, 0, frameChats, ['list', null, meetingsOnly]);
     if (!list || !list.ok || !list.items.length) {
-      await setState({ running: false, phase: 'error', message: 'Aucune discussion trouvée.' });
+      await setState({ running: false, phase: 'error', message: meetingsOnly ? 'Aucune réunion trouvée.' : 'Aucune discussion trouvée.' });
       return;
     }
 

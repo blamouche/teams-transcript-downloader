@@ -173,3 +173,20 @@
   toggle « Réunions uniquement ».
 - Next : commit `chore(v2): enrich chat diagnostic to find meeting icon` puis
   push.
+
+## 2026-06-16 17:15 — agent (Claude)
+
+- Action : Debug DOM reçu → signal réunion identifié. Classification sidebar
+  Teams v2 : personne 1:1 = `[data-tid="PersonaAvatar"]` (+ `presence-badge`) ;
+  groupe = photo `<img>` sans svg ; réunion = `span.fui-Avatar__icon` (svg)
+  SANS PersonaAvatar ; équipe/canal = `fui-Icon-filled/regular`. → Filtre
+  « Réunions uniquement » (`meetingsOnly`, défaut ON) dans
+  `frameChats(action,arg,meetingsOnly)` via `isPerson`/`isMeeting`. NB : les
+  réunions (sans `img`) étaient auparavant exclues du scan-all → corrigé.
+  Toggle popup + réglage persistant. Extension 2.1.0 → 2.2.0.
+- Fichiers : `v2/background.js`, `v2/popup.{html,js}`, `v2/manifest.json`,
+  `.prompt-hub/version.md` (0.1.6 → 0.1.7), `.prompt-hub/releases.md`.
+- Validation : `node --check` OK. À valider en réel (que `kept` réunions =
+  FF #2 Soheir, Bi-weekly AI F, G5 Weekly… et exclut personnes/groupes).
+- Next : commit `feat(v2): meetings-only filter via avatar icon signal` puis
+  push.

@@ -1,5 +1,17 @@
 # Releases
 
+## 0.1.7 — 2026-06-16
+
+- **V2 / filtre « Réunions uniquement »** (extension 2.1.0 → 2.2.0, activé par
+  défaut). Signal DOM confirmé par le debug réel : une discussion est une
+  réunion ssi elle contient `span.fui-Avatar__icon` (icône générique) **sans**
+  `[data-tid="PersonaAvatar"]`. Les chats individuels (PersonaAvatar +
+  presence-badge) et de groupe (photo `img`) sont ignorés.
+- `frameChats(action, arg, meetingsOnly)` : nouvelle classification
+  `isPerson`/`isMeeting`. En mode réunions, ne retient que les réunions ; sinon
+  retient personne + groupe + réunion (les réunions étaient auparavant exclues
+  car sans `img`). Réglage `meetingsOnly` persistant + toggle popup.
+
 ## 0.1.6 — 2026-06-16
 
 - **V2 / diagnostic enrichi** (préparation filtre « réunions uniquement »).

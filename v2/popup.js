@@ -6,6 +6,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   const autoSwitch = document.getElementById('auto-switch');
+  const meetingsOnlySwitch = document.getElementById('meetings-only');
   const maxChatsInput = document.getElementById('max-chats');
   const autoBtn = document.getElementById('auto-btn');
   const stopBtn = document.getElementById('stop-btn');
@@ -73,10 +74,15 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- Réglages ----
 
   async function loadSettings() {
-    const { autoEnabled, maxChats } = await chrome.storage.local.get(['autoEnabled', 'maxChats']);
+    const { autoEnabled, maxChats, meetingsOnly } = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly']);
     autoSwitch.checked = !!autoEnabled;
+    meetingsOnlySwitch.checked = meetingsOnly ?? true;
     maxChatsInput.value = Number.isFinite(maxChats) ? maxChats : 50;
   }
+
+  meetingsOnlySwitch.addEventListener('change', async () => {
+    await chrome.storage.local.set({ meetingsOnly: meetingsOnlySwitch.checked });
+  });
 
   autoSwitch.addEventListener('change', async () => {
     const enabled = autoSwitch.checked;

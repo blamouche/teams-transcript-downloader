@@ -26,7 +26,8 @@ La V2 déporte toute l'orchestration dans un **service worker** ([`background.js
 - un **onglet Teams dédié** est ouvert automatiquement (non actif) si aucun n'existe ;
 - si l'**Automatisation** est activée, le scan démarre **immédiatement**, puis **se relance en boucle** avec une **pause d'1 minute entre deux scans** (via `chrome.alarms`) ; il redémarre aussi au lancement du navigateur ;
 - le scan peut être **arrêté manuellement** en cours (bouton **Arrêter**) ;
-- le nombre de discussions scannées est **paramétrable** (les N premières, défaut **50**, `0` = toutes).
+- le nombre de discussions scannées est **paramétrable** (les N premières, défaut **50**, `0` = toutes) ;
+- option **« Réunions uniquement »** (activée par défaut) : ne scanne que les chats de réunion, en s'appuyant sur l'icône d'avatar générique (`span.fui-Avatar__icon` sans `[data-tid="PersonaAvatar"]`), et ignore les chats individuels (avatar + badge de présence) et de groupe (photo).
 
 Déroulé du scan, pour chaque discussion du bloc **Discussions** :
 
