@@ -16,10 +16,29 @@ const DEFAULTS = { autoEnabled: false, maxChats: 50, meetingsOnly: true, interva
 const TEAMS_URL = 'https://teams.microsoft.com/v2/';
 
 // État partagé (mémoire du SW) + reflété dans chrome.storage ('scanState').
-let stopRequested = false;
+//
+// Annulation par génération : chaque scan capture `scanGen` au démarrage (`myGen`).
+// Il reste valide tant que `scanGen === myGen`. `cancelScan()` incrémente `scanGen`,
+// ce qui invalide instantanément le scan en cours : à son prochain point de contrôle
+// il sort SANS écrire d'état (le demandeur de l'arrêt — ou le nouveau scan — est
+// propriétaire de l'état). Cela évite qu'un scan moribond écrase l'état idle propre.
+let scanGen = 0;
 let isRunning = false;
+let pendingAutoStart = false; // une relance auto est demandée dès la fin du scan courant
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+// Sommeil annulable : se réveille tôt si le scan a été invalidé (Stop / nouveau scan),
+// pour un arrêt réactif au lieu d'attendre la fin d'un long `sleep`.
+async function sleepCancellable(ms, gen) {
+  const step = 250;
+  let waited = 0;
+  while (waited < ms) {
+    if (scanGen !== gen) return;
+    await sleep(Math.min(step, ms - waited));
+    waited += step;
+  }
+}
 
 async function getSettings() {
   const s = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly', 'intervalMin']);
@@ -52,6 +71,32 @@ async function resetToIdleState(message = 'Prêt.') {
     nextRunAt: null,
     message
   });
+}
+
+// Invalide le scan en cours (le rend obsolète). Le scan sortira à son prochain point
+// de contrôle. On signale aussi l'arrêt à l'extraction injectée (boucle de scroll
+// longue) via un flag dans la page, sinon la discussion courante continuerait d'être
+// traitée côté Teams malgré l'arrêt.
+function cancelScan() {
+  scanGen++;
+  signalAbortToTab().catch(() => {});
+}
+
+// Pose `window.__ttdAbort = true` dans toutes les frames de l'onglet Teams dédié.
+// `frameFullExtract` lit ce flag à chaque palier de défilement et s'interrompt.
+// Les scripts injectés (chrome.scripting, monde isolé) partagent le `window` du
+// monde isolé par frame, donc ce flag est bien visible par l'extraction en cours.
+async function signalAbortToTab() {
+  const { dedicatedTabId } = await chrome.storage.local.get('dedicatedTabId');
+  if (!dedicatedTabId) return;
+  let frames = [];
+  try { frames = await chrome.webNavigation.getAllFrames({ tabId: dedicatedTabId }); } catch (e) { return; }
+  await Promise.all((frames || []).map(f =>
+    chrome.scripting.executeScript({
+      target: { tabId: dedicatedTabId, frameIds: [f.frameId] },
+      func: () => { try { window.__ttdAbort = true; } catch (e) { /* ignore */ } }
+    }).catch(() => {})
+  ));
 }
 
 // ============================================================
@@ -233,6 +278,9 @@ function frameFullExtract() {
   }
 
   return (async () => {
+    // Réinitialise le flag d'arrêt pour cette extraction (un flag posé lors d'un
+    // arrêt précédent ne doit pas interrompre une nouvelle extraction).
+    try { window.__ttdAbort = false; } catch (e) { /* ignore */ }
     const container = findContainer();
     if (!container) return { found: false, reason: 'no container' };
 
@@ -267,6 +315,8 @@ function frameFullExtract() {
     let stable = 0;
     let lastCount = -1;
     for (let i = 0; i < 800; i++) {
+      // Arrêt demandé depuis le service worker : on stoppe le défilement immédiatement.
+      try { if (window.__ttdAbort) break; } catch (e) { /* ignore */ }
       collect();
       if (allEntries.length === lastCount) stable++;
       else { stable = 0; lastCount = allEntries.length; }
@@ -561,10 +611,10 @@ async function ensureTeamsTab() {
 }
 
 // Attend que la liste des discussions soit rendue (SPA Teams).
-async function waitForChatList(tabId, timeoutMs = 90000) {
+async function waitForChatList(tabId, gen, timeoutMs = 90000) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
-    if (stopRequested) return false;
+    if (gen !== undefined && scanGen !== gen) return false;
     try {
       const list = await runInFrame(tabId, 0, frameChats, ['list', null]);
       if (list && list.ok && list.items.length) return true;
@@ -667,16 +717,19 @@ async function extractBest(tabId, tabUrl, minScore) {
 // On tente donc l'extraction DIRECTE d'abord (sans cliquer, ce qui détruisait
 // l'iframe), puis en repli on ouvre l'onglet Récap + sous-onglet Transcript via
 // leurs data-tid stables (pas de match texte destructeur).
-async function tryExtractCurrent(tabId, tabUrl) {
+async function tryExtractCurrent(tabId, tabUrl, gen) {
   // 1) tentative directe (seuil élevé : un vrai transcript a un score important)
   let r = await extractBest(tabId, tabUrl, 30);
   if (r.transcript) { lastDiag = { path: 'direct', bestScore: r.bestScore }; return r.transcript; }
+  if (scanGen !== gen) return null;
 
   // 2) repli : onglet Récapitulatif puis sous-onglet Transcript (data-tid)
   const recap = await runInFrame(tabId, 0, frameClickTid, ['tab-item-com.microsoft.chattabs.recap']);
-  await sleep(4000);
+  await sleepCancellable(4000, gen);
+  if (scanGen !== gen) return null;
   const tr = await runInFrame(tabId, 0, frameClickTid, ['Transcript']);
-  await sleep(5000);
+  await sleepCancellable(5000, gen);
+  if (scanGen !== gen) return null;
 
   r = await extractBest(tabId, tabUrl, 8);
   lastDiag = {
@@ -690,22 +743,27 @@ async function tryExtractCurrent(tabId, tabUrl) {
   return r.transcript;
 }
 
-async function expandChatList(tabId, maxExpand = 20) {
+async function expandChatList(tabId, gen, maxExpand = 20) {
   for (let i = 0; i < maxExpand; i++) {
-    if (stopRequested) return;
+    if (scanGen !== gen) return;
     let res;
     try { res = await runInFrame(tabId, 0, frameClickVoirPlus); } catch (e) { break; }
     if (!res || !res.ok) break;
     await setState({ message: `Chargement des discussions… (${i + 1})` });
-    await sleep(1500);
+    await sleepCancellable(1500, gen);
   }
 }
 
 async function startScan(reason = 'manual') {
   if (isRunning) return;
   isRunning = true;
-  stopRequested = false;
+  const myGen = ++scanGen; // ce scan est valide tant que scanGen === myGen
   startKeepAlive();
+
+  // `aborted()` : le scan a-t-il été invalidé (Stop manuel ou nouveau scan) ?
+  // Dans ce cas on sort SANS écrire d'état — le demandeur de l'arrêt est propriétaire
+  // de l'état affiché (évite d'écraser l'état idle propre par un « Arrêté à i/total »).
+  const aborted = () => scanGen !== myGen;
 
   try {
     const { maxChats, meetingsOnly } = await getSettings();
@@ -714,13 +772,13 @@ async function startScan(reason = 'manual') {
     const tabId = await ensureTeamsTab();
 
     await setState({ phase: 'opening', message: 'Attente du chargement de Teams…' });
-    const ready = await waitForChatList(tabId);
-    if (stopRequested) { await setState({ running: false, phase: 'stopped', message: 'Arrêté.' }); return; }
+    const ready = await waitForChatList(tabId, myGen);
+    if (aborted()) return;
     if (!ready) { await setState({ running: false, phase: 'error', message: 'Teams n\'a pas chargé la liste des discussions.' }); return; }
 
     await setState({ phase: 'expanding', message: 'Chargement des discussions masquées…' });
-    await expandChatList(tabId);
-    if (stopRequested) { await setState({ running: false, phase: 'stopped', message: 'Arrêté.' }); return; }
+    await expandChatList(tabId, myGen);
+    if (aborted()) return;
 
     const list = await runInFrame(tabId, 0, frameChats, ['list', null, meetingsOnly]);
     if (!list || !list.ok || !list.items.length) {
@@ -737,7 +795,7 @@ async function startScan(reason = 'manual') {
     await setState({ phase: 'scanning', total });
 
     for (let i = 0; i < total; i++) {
-      if (stopRequested) { await setState({ running: false, phase: 'stopped', summary: { downloaded, skipped, noTranscript, total, finishedAt: Date.now() }, message: `Arrêté à ${i}/${total} : ${downloaded} téléchargé(s), ${skipped} déjà traité(s), ${noTranscript} sans transcript.` }); return; }
+      if (aborted()) return;
 
       const label = items[i].label || `discussion ${i + 1}`;
       await setState({ current: i + 1, currentLabel: label, downloaded, message: `Discussion ${i + 1}/${total} : ${label}` });
@@ -745,10 +803,12 @@ async function startScan(reason = 'manual') {
       let clickRes;
       try { clickRes = await runInFrame(tabId, 0, frameChats, ['click', items[i].id]); } catch (e) { continue; }
       if (!clickRes || !clickRes.ok) continue;
-      await sleep(4000); // laisse le récapitulatif + l'iframe transcript se charger
+      await sleepCancellable(4000, myGen); // laisse le récapitulatif + l'iframe transcript se charger
+      if (aborted()) return;
 
       let transcript;
-      try { transcript = await tryExtractCurrent(tabId, TEAMS_URL); } catch (e) { transcript = null; }
+      try { transcript = await tryExtractCurrent(tabId, TEAMS_URL, myGen); } catch (e) { transcript = null; }
+      if (aborted()) return;
       if (!transcript) { noTranscript++; continue; }
 
       const key = transcriptKey(transcript);
@@ -772,15 +832,23 @@ async function startScan(reason = 'manual') {
       doneMsg += ` Diag : ${JSON.stringify(lastDiag)}`;
     }
     await setState({ running: false, phase: 'done', downloaded, summary: { downloaded, skipped, noTranscript, total, finishedAt: Date.now() }, message: doneMsg });
-    // Boucle d'automatisation : si toujours activée et non arrêtée, on relance
-    // après une pause d'1 minute.
-    const { autoEnabled } = await getSettings();
-    if (autoEnabled && !stopRequested) await scheduleNextRun();
   } catch (error) {
-    await setState({ running: false, phase: 'error', message: 'Erreur : ' + (error && error.message ? error.message : String(error)) });
+    if (!aborted()) await setState({ running: false, phase: 'error', message: 'Erreur : ' + (error && error.message ? error.message : String(error)) });
   } finally {
     isRunning = false;
     stopKeepAlive();
+    // Point de sortie unique de la boucle d'automatisation :
+    //   - scan invalidé (Stop / nouveau scan) → on ne planifie rien. Si une relance
+    //     immédiate a été demandée pendant ce scan, on l'exécute maintenant.
+    //   - sinon, si l'automatisation est active, on (re)planifie le prochain scan
+    //     QUELLE QUE SOIT l'issue (done, erreur, vide…). Ainsi le compte à rebours
+    //     réapparaît toujours et la boucle ne meurt jamais silencieusement.
+    if (scanGen !== myGen) {
+      if (pendingAutoStart) { pendingAutoStart = false; startScan('auto'); }
+    } else {
+      const { autoEnabled } = await getSettings();
+      if (autoEnabled) await scheduleNextRun();
+    }
   }
 }
 
@@ -866,8 +934,9 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         sendResponse({ ok: true });
         break;
       case 'stop':
-        stopRequested = true;
-        await cancelAutoStart(); // n'enchaîne pas le prochain scan de la boucle
+        cancelScan();                // invalide le scan en cours + signale l'arrêt à l'extraction injectée
+        pendingAutoStart = false;    // un Stop annule toute relance auto en attente
+        await cancelAutoStart();     // n'enchaîne pas le prochain scan de la boucle
         await chrome.storage.local.set({ autoEnabled: false });
         await resetToIdleState('Arrêté. Automatisation désactivée.');
         await updateActionUI();
@@ -885,9 +954,14 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       }
       case 'autoEnabledChanged':
         if (msg.enabled) {
-          // Démarrage immédiat ; la boucle se replanifie ensuite (pause 1 min).
-          if (!isRunning) startScan('auto');
+          // Démarrage immédiat. Si un scan est encore en train de s'arrêter
+          // (ex. juste après un Stop), on demande une relance dès sa fin pour que
+          // l'activation reprenne aussitôt sans attendre l'intervalle.
+          await cancelAutoStart(); // évite un double déclenchement si une alarme traîne
+          if (isRunning) pendingAutoStart = true;
+          else startScan('auto');
         } else {
+          pendingAutoStart = false;
           await cancelAutoStart();
         }
         await updateActionUI();

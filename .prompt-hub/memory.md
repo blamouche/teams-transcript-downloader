@@ -357,3 +357,22 @@
   `README.md`, `.prompt-hub/version.md` (0.1.12 → 0.1.13), `.prompt-hub/releases.md`.
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): loader, runtime icon, status badge` puis push.
+
+## 2026-06-16 22:05 — agent (Claude)
+
+- Action : Revue de cohérence des évènements V2 + correction des 3 problèmes
+  signalés. (1) Compte à rebours invisible entre scans : `scheduleNextRun()`
+  déplacé dans un point de sortie unique (`finally`) → replanifié quelle que soit
+  l'issue tant que l'automatisation est active. (2) Ré-activation sans relance :
+  drapeau `pendingAutoStart` qui relance dès la fin du scan moribond. (3) Scan qui
+  continue côté Teams après Stop : flag `window.__ttdAbort` lu par la boucle de
+  défilement de `frameFullExtract` + `sleepCancellable`. Remplacement du booléen
+  `stopRequested` par un compteur de génération `scanGen` (un scan invalidé sort
+  sans écrire d'état → n'écrase plus l'état idle).
+- Fichiers modifiés : `v2/background.js`, `.prompt-hub/version.md` (0.1.19 →
+  0.1.20), `.prompt-hub/releases.md`,
+  `.prompt-hub/todo/todo-20260616-220000-v2-event-coherence.md`.
+- Validation : `node --check v2/background.js` + `v2/popup.js` OK ; manifest JSON
+  valide. Pas de test navigateur exécuté (environnement CLI).
+- Outcome : success.
+- Next : commit `fix(v2): coherent stop/auto-loop semantics` puis push.

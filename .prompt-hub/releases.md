@@ -1,5 +1,28 @@
 # Releases
 
+## 0.1.20 — 2026-06-16
+
+- **V2 / Cohérence des évènements : refonte de la sémantique d'arrêt et de la
+  boucle d'automatisation**. Trois problèmes corrigés :
+  1. *Compte à rebours invisible entre deux scans* : `scheduleNextRun()` n'était
+     appelé que sur le chemin heureux `done`. Toute autre issue (erreur, aucune
+     réunion, Teams pas prêt, frame vide) tuait la boucle sans replanifier. La
+     re-planification est désormais dans un point de sortie unique (`finally`) :
+     dès que l'automatisation est active, le prochain scan est planifié quelle que
+     soit l'issue → le compte à rebours réapparaît toujours.
+  2. *Ré-activation sans relance immédiate* : après un Stop, le scan moribond
+     gardait `isRunning = true`, donc `if (!isRunning) startScan()` ne faisait rien.
+     Ajout d'un drapeau `pendingAutoStart` : si un scan est encore en train de
+     s'arrêter, la relance s'exécute dès sa fin ; sinon démarrage immédiat.
+  3. *Scan qui continue côté Teams après Stop* : `stopRequested` n'était testé
+     qu'aux gros checkpoints ; l'extraction injectée (`frameFullExtract`, boucle de
+     défilement de plusieurs minutes) et les `sleep` l'ignoraient. Introduction d'un
+     flag `window.__ttdAbort` posé dans les frames Teams au Stop et lu par la boucle
+     de défilement, plus des `sleepCancellable` → l'extraction s'interrompt vite.
+  - Remplacement du booléen `stopRequested` par un compteur de génération `scanGen` :
+    un scan invalidé sort sans écrire d'état, ce qui empêche un scan moribond
+    d'écraser l'état idle propre posé par `resetToIdleState`.
+
 ## 0.1.19 — 2026-06-16
 
 - **V2 / UI : correction du switch Automatisation qui restait visuellement ON**.
