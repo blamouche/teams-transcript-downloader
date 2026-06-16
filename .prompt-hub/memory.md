@@ -247,3 +247,17 @@
   compte à rebours, bilan).
 - Next : commit `fix(v2): extract transcript from recap iframe; settings/UX`
   puis push.
+
+## 2026-06-16 18:50 — agent (Claude)
+
+- Action : Bug — fichier transcript incomplet (« trop rapide »). Cause : liste
+  virtualisée + ancien scroll s'arrêtant trop tôt / early-return si conteneur
+  non scrollable. → `frameFullExtract` réécrit : `scrollableAncestor` (vrai
+  élément overflow), défilement par paliers (~0.8×clientHeight), attente 600 ms,
+  arrêt seulement si entrées STABLES (8×) ET en bas (max 800 paliers).
+  Extension 2.4.0 → 2.4.1.
+- Fichiers : `v2/background.js`, `v2/manifest.json`,
+  `.prompt-hub/version.md` (0.1.10 → 0.1.11), `.prompt-hub/releases.md`.
+- Validation : `node --check` OK. À valider en réel (transcript complet).
+- Next : commit `fix(v2): scroll virtualized transcript fully to avoid truncation`
+  puis push.

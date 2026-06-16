@@ -1,5 +1,17 @@
 # Releases
 
+## 0.1.11 — 2026-06-16
+
+- **V2 / transcript incomplet corrigé** (extension 2.4.0 → 2.4.1). Le transcript
+  du récap est une **liste virtualisée** : l'ancien défilement s'arrêtait trop
+  tôt (et ne récupérait que la portion visible si le conteneur détecté n'était
+  pas scrollable) → fichier tronqué.
+  - `frameFullExtract` réécrit : détection du **vrai élément scrollable**
+    (ancêtre `overflow:auto/scroll`, sinon le conteneur, sinon le document),
+    défilement par paliers (~80 % de la hauteur visible) avec **attente de 600 ms**
+    pour le rendu lazy, et arrêt seulement quand le nombre d'entrées est
+    **stable (8 lectures) ET arrivé en bas** (jusqu'à 800 paliers).
+
 ## 0.1.10 — 2026-06-16
 
 - **V2 / extraction du transcript corrigée** (extension 2.3.1 → 2.4.0). Le

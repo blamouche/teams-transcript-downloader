@@ -151,36 +151,53 @@ function frameFullExtract() {
   return (async () => {
     const container = findContainer();
     if (!container) return { found: false, reason: 'no container' };
+
+    // Trouve le vrai élément scrollable (la liste de transcript est virtualisée :
+    // sans défilement on ne récupère que la portion visible → fichier incomplet).
+    function scrollableAncestor(el) {
+      let n = el;
+      while (n && n !== document.body) {
+        const cs = getComputedStyle(n);
+        const oy = cs.overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && n.scrollHeight > n.clientHeight + 20) return n;
+        n = n.parentElement;
+      }
+      return null;
+    }
+
     const allEntries = [];
     const seenKeys = new Set();
-    const initialScrollTop = container.scrollTop;
-    const isScrollable = container.scrollHeight > container.clientHeight + 50;
-    if (!isScrollable) {
-      const entries = collectEntries(container, seenKeys);
-      return { found: entries.length > 0, entries, scrolled: false };
+    const collect = () => { for (const e of collectEntries(container, seenKeys)) allEntries.push(e); };
+
+    const scroller = scrollableAncestor(container)
+      || (container.scrollHeight > container.clientHeight + 20 ? container : (document.scrollingElement || document.documentElement));
+
+    // On part du haut pour tout balayer dans l'ordre.
+    try { scroller.scrollTop = 0; } catch (e) { /* ignore */ }
+    await sleep(600);
+    collect();
+
+    // Défilement par paliers ; on ne s'arrête que lorsque le nombre d'entrées
+    // est STABLE plusieurs fois ET qu'on est arrivé en bas (lignes virtualisées
+    // chargées au fur et à mesure). Attentes généreuses pour le rendu lazy.
+    let stable = 0;
+    let lastCount = -1;
+    for (let i = 0; i < 800; i++) {
+      collect();
+      if (allEntries.length === lastCount) stable++;
+      else { stable = 0; lastCount = allEntries.length; }
+
+      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 5;
+      if (stable >= 8 && atBottom) break;
+
+      const step = Math.max(200, Math.floor(scroller.clientHeight * 0.8));
+      scroller.scrollTop = Math.min(scroller.scrollHeight, scroller.scrollTop + step);
+      await sleep(600);
     }
-    let sameCount = 0;
-    let scrolls = 0;
-    while (scrolls < 500) {
-      const entries = collectEntries(container, seenKeys);
-      allEntries.push(...entries);
-      const maxScroll = container.scrollHeight - container.clientHeight;
-      if (container.scrollTop >= maxScroll - 50) {
-        sameCount++;
-        if (sameCount >= 5) break;
-      } else {
-        sameCount = 0;
-      }
-      container.scrollTop += 500;
-      await sleep(400);
-      scrolls++;
-    }
-    container.scrollTop = 0;
-    await sleep(800);
-    const finalEntries = collectEntries(container, seenKeys);
-    allEntries.push(...finalEntries);
-    container.scrollTop = initialScrollTop;
-    return { found: allEntries.length > 0, entries: allEntries, scrolled: true, scrollCount: scrolls };
+
+    // Passe finale tout en bas.
+    collect();
+    return { found: allEntries.length > 0, entries: allEntries, scrolled: true };
   })();
 }
 
