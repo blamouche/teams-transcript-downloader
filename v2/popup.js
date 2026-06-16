@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const stopBtn = document.getElementById('stop-btn');
   const extractBtn = document.getElementById('extract-btn');
   const debugBtn = document.getElementById('debug-btn');
+  const debugMeetingBtn = document.getElementById('debug-meeting-btn');
   const resetBtn = document.getElementById('reset-btn');
   const statusMessage = document.getElementById('status-message');
   const progressWrap = document.getElementById('progress-wrap');
@@ -115,6 +116,12 @@ document.addEventListener('DOMContentLoaded', () => {
     const resp = await send('debug');
     if (resp && resp.ok) showStatus(`Debug : ${resp.frames} frames (teams-dom-debug.json téléchargé).`, 'success');
     else showStatus('Debug : erreur.', 'error');
+  });
+  debugMeetingBtn.addEventListener('click', async () => {
+    showStatus('Debug réunion en cours (ouvre la 1re réunion + récap)…', 'loading');
+    const resp = await send('debugMeeting');
+    if (resp && resp.ok) showStatus(`Debug réunion : ${resp.meetingCount} réunion(s) (teams-meeting-debug.json téléchargé).`, 'success');
+    else showStatus('Debug réunion : erreur.', 'error');
   });
 
   // ---- Init ----

@@ -1,5 +1,21 @@
 # Releases
 
+## 0.1.9 — 2026-06-16
+
+- **V2 / diagnostic d'extraction** (extension 2.3.0 → 2.3.1). Le scan trouve les
+  réunions mais aucun transcript n'est téléchargé → instrumentation pour
+  localiser l'échec (ouverture récap/transcription en arrière-plan).
+  - `tryExtractCurrent` enregistre `lastDiag` (recap cliqué ? transcript
+    cliqué ? libellés, meilleur score de frame). Affiché dans le bilan de fin
+    si 0 téléchargement.
+  - Mots-clés transcript élargis (« transcription », « afficher la
+    transcription », « show transcript »), délais portés à 3,5 s.
+  - Nouveau bouton **« Debug réunion »** (message `debugMeeting`) : ouvre la 1re
+    réunion, tente récap→transcription et dumpe, à chaque étape, les frames
+    (scan) + les libellés cliquables (`frameListClickables`) dans
+    `teams-meeting-debug.json`. Objectif : récupérer les vrais libellés/onglets
+    du récap pour fiabiliser la navigation.
+
 ## 0.1.8 — 2026-06-16
 
 - **V2 / historique persistant des transcripts traités** (extension 2.2.0 →

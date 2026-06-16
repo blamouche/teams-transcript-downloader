@@ -356,6 +356,23 @@ function frameDumpSidebar() {
   return out;
 }
 
+// Liste les éléments cliquables visibles (onglets/boutons/liens) d'une frame,
+// pour découvrir les libellés réels (Récapitulatif, Transcription…).
+function frameListClickables() {
+  function vis(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+  const out = [];
+  const els = document.querySelectorAll('button,[role="tab"],[role="button"],a,[role="link"],[role="menuitem"],[role="menuitemradio"]');
+  for (const el of els) {
+    if (!vis(el)) continue;
+    const t = (el.textContent || '').trim().slice(0, 50);
+    const a = ((el.getAttribute('aria-label')) || '').slice(0, 50);
+    if (!t && !a) continue;
+    out.push({ t, a, role: el.getAttribute('role'), tid: el.getAttribute('data-tid') });
+    if (out.length >= 60) break;
+  }
+  return out;
+}
+
 // ============================================================
 // Helpers d'injection (côté service worker)
 // ============================================================
@@ -523,16 +540,23 @@ async function saveProcessed(map) {
 // Orchestration du scan
 // ============================================================
 
+let lastDiag = null; // diagnostic de la dernière tentative d'extraction
+
 async function tryExtractCurrent(tabId, tabUrl) {
   const recap = await clickAcrossFrames(tabId, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
-  if (recap.ok) await sleep(3000);
-  const transcript = await clickAcrossFrames(tabId, ['transcript', 'transcription']);
-  if (transcript.ok) await sleep(3000);
-  else if (!recap.ok) return null;
+  if (recap.ok) await sleep(3500);
+  const transcript = await clickAcrossFrames(tabId, ['transcription', 'transcript', 'afficher la transcription', 'show transcript']);
+  if (transcript.ok) await sleep(3500);
+  else if (!recap.ok) { lastDiag = { recap: false, transcript: false, reason: 'aucun onglet récap/transcription cliquable' }; return null; }
   const { bestFrame, bestScore } = await findTranscriptFrame(tabId);
-  if (!bestFrame || bestScore < 3) return null;
+  lastDiag = {
+    recap: recap.ok, recapLabel: recap.matched || null,
+    transcript: transcript.ok, transcriptLabel: transcript.matched || null,
+    bestScore, bestFrameUrl: bestFrame ? bestFrame.frameUrl : null
+  };
+  if (!bestFrame || bestScore < 3) { lastDiag.reason = 'transcript introuvable (score insuffisant)'; return null; }
   const { title, entries } = await extractFromFrame(tabId, bestFrame);
-  if (!entries.length) return null;
+  if (!entries.length) { lastDiag.reason = 'frame trouvée mais 0 entrée extraite'; return null; }
   return { title, date: new Date().toISOString(), entries, url: tabUrl };
 }
 
@@ -611,7 +635,11 @@ async function startScan(reason = 'manual') {
       await setState({ downloaded, message: `Téléchargé : ${transcript.title} (${transcript.entries.length}) — ${downloaded} au total` });
     }
 
-    await setState({ running: false, phase: 'done', downloaded, message: `Terminé : ${downloaded} nouveau(x), ${skipped} déjà traité(s), sur ${total} discussions.` });
+    let doneMsg = `Terminé : ${downloaded} nouveau(x), ${skipped} déjà traité(s), sur ${total} discussions.`;
+    if (downloaded === 0 && skipped === 0 && lastDiag) {
+      doneMsg += ` Diag dernière réunion : ${JSON.stringify(lastDiag)}`;
+    }
+    await setState({ running: false, phase: 'done', downloaded, message: doneMsg });
     // Boucle d'automatisation : si toujours activée et non arrêtée, on relance
     // après une pause d'1 minute.
     const { autoEnabled } = await getSettings();
@@ -740,6 +768,45 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         const url = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(report, null, 2));
         await chrome.downloads.download({ url, filename: 'teams-dom-debug.json', saveAs: false });
         sendResponse({ ok: true, frames: frames.length });
+        break;
+      }
+      case 'debugMeeting': {
+        // Ouvre la 1re réunion et capture, à chaque étape, les frames + libellés
+        // cliquables, pour identifier les onglets Récapitulatif / Transcription.
+        const tabId = await ensureTeamsTab();
+        await setState({ phase: 'opening', message: 'Debug réunion : ouverture de Teams…' });
+        const ready = await waitForChatList(tabId);
+        const report = { ready };
+        async function snapshot() {
+          const frames = await chrome.webNavigation.getAllFrames({ tabId });
+          const res = [];
+          for (const f of frames) {
+            const e = { frameId: f.frameId, url: f.url };
+            try { e.scan = await runInFrame(tabId, f.frameId, frameScanForTranscript); } catch (err) { e.err = err.message; }
+            try { e.clickables = await runInFrame(tabId, f.frameId, frameListClickables); } catch (err) { /* ignore */ }
+            res.push(e);
+          }
+          return res;
+        }
+        const list = await runInFrame(tabId, 0, frameChats, ['list', null, true]);
+        report.meetingCount = list && list.items ? list.items.length : 0;
+        if (report.meetingCount > 0) {
+          const first = list.items[0];
+          report.opened = first.label;
+          await runInFrame(tabId, 0, frameChats, ['click', first.id, true]);
+          await sleep(3500);
+          report.afterOpen = await snapshot();
+          report.recapClick = await clickAcrossFrames(tabId, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
+          await sleep(4000);
+          report.afterRecap = await snapshot();
+          report.transcriptClick = await clickAcrossFrames(tabId, ['transcription', 'transcript', 'afficher la transcription', 'show transcript']);
+          await sleep(4000);
+          report.afterTranscript = await snapshot();
+        }
+        const u = 'data:application/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(report, null, 2));
+        await chrome.downloads.download({ url: u, filename: 'teams-meeting-debug.json', saveAs: false });
+        await setState({ phase: 'idle', message: `Debug réunion terminé (${report.meetingCount} réunion(s)).` });
+        sendResponse({ ok: true, meetingCount: report.meetingCount });
         break;
       }
       default:

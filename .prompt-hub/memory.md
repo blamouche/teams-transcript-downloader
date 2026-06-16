@@ -206,3 +206,21 @@
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persist processed transcripts to skip re-downloads`
   puis push.
+
+## 2026-06-16 17:55 — agent (Claude)
+
+- Action : Bug rapporté — scan réunions OK mais aucun téléchargement
+  (tryExtractCurrent renvoie null → recap/transcription en arrière-plan non
+  trouvés/non chargés). Instrumentation : `lastDiag` (recap/transcript
+  cliqués ?, libellés, bestScore) affiché dans le bilan si 0 download ;
+  mots-clés transcript élargis + délais 3,5 s ; bouton « Debug réunion »
+  (`debugMeeting`) qui ouvre la 1re réunion, tente récap→transcription et dumpe
+  frames + libellés cliquables (`frameListClickables`) → teams-meeting-debug.json.
+  Extension 2.3.0 → 2.3.1.
+- Fichiers : `v2/background.js`, `v2/popup.{html,js}`, `v2/manifest.json`,
+  `.prompt-hub/version.md` (0.1.8 → 0.1.9), `.prompt-hub/releases.md`.
+- Outcome : success (diagnostic). EN ATTENTE de teams-meeting-debug.json pour
+  identifier les onglets récap/transcription et fiabiliser l'extraction.
+  Hypothèse à vérifier : iframe recap non chargée en onglet inactif.
+- Next : commit `chore(v2): diagnose meeting recap/transcript extraction` puis
+  push.
