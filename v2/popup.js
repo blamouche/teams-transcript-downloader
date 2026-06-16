@@ -338,6 +338,43 @@ document.addEventListener('DOMContentLoaded', () => {
     return null;
   }
 
+  // Diagnostic : dumpe la structure réelle de la sidebar (rendue par React)
+  // pour identifier les vrais sélecteurs des éléments de discussion.
+  function frameDumpSidebar() {
+    function info(el) {
+      const cls = el.className && el.className.toString ? el.className.toString() : '';
+      return {
+        tag: el.tagName ? el.tagName.toLowerCase() : '',
+        role: el.getAttribute('role'),
+        dataTid: el.getAttribute('data-tid'),
+        id: el.id || null,
+        ariaLabel: el.getAttribute('aria-label'),
+        className: cls.slice(0, 100),
+        text: (el.textContent || '').trim().slice(0, 60)
+      };
+    }
+    const selectors = [
+      '[role="tree"]',
+      '[role="treeitem"]',
+      '[role="grid"]',
+      '[role="row"]',
+      '[role="listitem"]',
+      '[data-tid="chat-list"]',
+      '[data-tid="chatListContainer"]',
+      '[data-tid^="chat-list-item"]',
+      '[id^="chat-list-item"]',
+      '#chat-list',
+      '[aria-label]'
+    ];
+    const out = {};
+    for (const sel of selectors) {
+      let els = [];
+      try { els = Array.from(document.querySelectorAll(sel)); } catch (e) { continue; }
+      out[sel] = { count: els.length, samples: els.slice(0, 6).map(info) };
+    }
+    return out;
+  }
+
   // ============================================================
   // Helpers d'injection
   // ============================================================
@@ -589,6 +626,14 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         report.frames.push(frameInfo);
+      }
+
+      // Dump de la sidebar (frame principale) pour identifier les vrais
+      // sélecteurs des éléments de discussion.
+      try {
+        report.sidebar = await runInFrame(tab.id, 0, frameDumpSidebar);
+      } catch (e) {
+        report.sidebarError = e.message;
       }
 
       const dataStr = JSON.stringify(report, null, 2);

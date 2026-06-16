@@ -73,3 +73,18 @@
 - Validation : `node --check` OK, manifest JSON valide, pas de réf morte.
 - Outcome : success (sélecteurs Teams toujours à valider en réel).
 - Next : commit `feat(v2): add automation switch to scan all chats` puis push.
+
+## 2026-06-16 14:45 — agent (Claude)
+
+- Action : L'utilisateur a fourni un "code source" de page Teams = en fait le
+  shell HTML d'amorçage (React + bundle lodash), pas la sidebar rendue. Noms de
+  réunions cités : "Pierre-Ben", "FF #2 Soheir", "Bi-weekly AI F..." → les
+  discussions meeting n'ont PAS de mot-clé dans leur nom, ce qui valide le choix
+  du scan-all sans filtre. Ajout d'un diagnostic `frameDumpSidebar` injecté,
+  intégré au rapport *Debug DOM* (clé `sidebar`), pour récupérer les vrais
+  sélecteurs DOM et fiabiliser `frameChats`.
+- Fichiers : `v2/popup.js`, `.prompt-hub/version.md` (0.1.1 → 0.1.2),
+  `.prompt-hub/releases.md`.
+- Outcome : success. EN ATTENTE du JSON de debug (section `sidebar`) de
+  l'utilisateur pour verrouiller les sélecteurs de la liste de discussions.
+- Next : commit `chore(v2): dump sidebar structure in Debug DOM` puis push.

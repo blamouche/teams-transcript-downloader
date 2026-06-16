@@ -1,5 +1,14 @@
 # Releases
 
+## 0.1.2 — 2026-06-16
+
+- **V2 / diagnostic** : le bouton *Debug DOM* dumpe désormais aussi la structure
+  réelle de la sidebar (fonction injectée `frameDumpSidebar`) sous la clé
+  `sidebar` du JSON — comptes et échantillons (role, data-tid, id, aria-label,
+  classes, texte) pour une série de sélecteurs candidats. Objectif : identifier
+  les vrais sélecteurs des éléments de discussion (rendus côté client par React,
+  donc absents du `view-source`) et fiabiliser `frameChats`.
+
 ## 0.1.1 — 2026-06-16
 
 - **V2** : ajout d'un **switch d'automatisation** (état persistant via
