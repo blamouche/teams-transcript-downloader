@@ -75,23 +75,23 @@ document.addEventListener('DOMContentLoaded', () => {
   // ============================================================
 
   // Énumère ou clique les discussions de la sidebar Teams.
-  //   action === 'list'  → renvoie { ok, items: [{index, label}] }
-  //   action === 'click' → clique la discussion à l'index donné
-  // La sélection est DÉTERMINISTE et identique entre 'list' et 'click' pour
-  // garder des indices stables. On part de [role="treeitem"] (Teams v2 rend la
-  // sidebar en un seul [role="tree"]), puis on filtre :
-  //   - éléments visibles uniquement,
-  //   - feuilles (pas de treeitem descendant) → exclut les en-têtes de section,
-  //   - hors items de navigation (Copilot, Mentions, Activité, Calendrier…).
-  // Cliquer un item de navigation changerait toute la vue et casserait le scan,
-  // d'où le filtrage strict.
-  function frameChats(action, index) {
+  //   action === 'list'  → renvoie { ok, items: [{id, label}] }
+  //   action === 'click' → clique la discussion dont l'id == arg (getElementById)
+  //
+  // Modèle DOM observé (Teams v2, debug réel) : la sidebar est un seul
+  // [role="tree"] de [role="treeitem"]. La zone Discussions précède la zone
+  // Équipes/canaux. Séparation nette et fiable :
+  //   - chats = feuilles visibles AVEC un id (menur…) ET un avatar (img),
+  //   - on s'arrête (break) au 1er marqueur de la zone Équipes
+  //     ("Afficher tous les canaux", "Voir toutes vos équipes"),
+  //   - on ignore la navigation et les contrôles ("Voir plus" sans id).
+  // Les canaux (sans avatar) et les en-têtes (non-feuilles) sont écartés.
+  function frameChats(action, arg) {
     function visible(el) {
       const r = el.getBoundingClientRect();
       return r.width > 0 && r.height > 0;
     }
 
-    // Libellés de navigation à exclure (fr/en, sans suffixe numérique de badge).
     const NAV_LABELS = new Set([
       'copilot', 'vues rapides', 'quick views', 'mentions',
       'discussions suivies', 'discussions épinglées', 'followed chats',
@@ -101,51 +101,75 @@ document.addEventListener('DOMContentLoaded', () => {
       'favorites', 'contacts', 'applications', 'apps', 'aide', 'help',
       'paramètres', 'settings', 'enregistré', 'saved', 'planificateur'
     ]);
+    // Marqueurs de DÉBUT de la zone Équipes/canaux → on arrête la collecte.
+    const TEAMS_MARKERS = ['afficher tous les canaux', 'voir toutes vos équipes', 'show all channels', 'see all your teams'];
+    // Contrôles du bloc Discussions à ignorer (sans interrompre la collecte).
+    const CONTROL_PREFIXES = ['voir plus', 'afficher plus', 'see more'];
 
-    function isNav(label) {
-      // retire un éventuel badge numérique en fin de texte (ex. "Mentions22")
-      const t = label.toLowerCase().replace(/\s*\d+$/, '').trim();
-      return !t || NAV_LABELS.has(t);
+    function norm(label) {
+      return label.toLowerCase().replace(/\s*\d+$/, '').trim();
     }
 
     function collectChatItems() {
       const all = Array.from(document.querySelectorAll('[role="treeitem"]'));
-      return all.filter(el => {
-        if (!visible(el)) return false;
-        // feuille : aucun treeitem imbriqué (exclut les sections déroulantes)
-        if (el.querySelector('[role="treeitem"]')) return false;
+      const items = [];
+      for (const el of all) {
+        if (!visible(el)) continue;
+        if (el.querySelector('[role="treeitem"]')) continue; // en-tête de section
         const label = (el.textContent || '').trim();
-        if (label.length < 2) return false;
-        if (isNav(label)) return false;
-        return true;
-      });
-    }
-
-    const items = collectChatItems();
-
-    if (items.length === 0) {
-      return { ok: false, reason: 'no chat items', items: [] };
+        const low = norm(label);
+        if (label.length < 2 || NAV_LABELS.has(low)) continue;
+        if (TEAMS_MARKERS.some(m => low.startsWith(m))) break; // zone Équipes atteinte
+        if (CONTROL_PREFIXES.some(c => low.startsWith(c))) continue; // "Voir plus"…
+        if (!el.id) continue; // contrôles synthétiques sans id
+        if (!el.querySelector('img,[role="img"]')) continue; // canal (sans avatar)
+        items.push(el);
+      }
+      return items;
     }
 
     if (action === 'list') {
+      const items = collectChatItems();
       return {
-        ok: true,
-        items: items.map((it, i) => ({
-          index: i,
-          id: it.id || null,
+        ok: items.length > 0,
+        items: items.map(it => ({
+          id: it.id,
           label: (it.textContent || '').trim().slice(0, 80)
         }))
       };
     }
 
-    // action === 'click'
-    const it = items[index];
-    if (!it) return { ok: false, reason: 'index out of range', count: items.length };
-    // scrolle l'élément dans la vue (listes virtualisées) puis clique
+    // action === 'click' → arg = id
+    const it = arg ? document.getElementById(arg) : null;
+    if (!it) return { ok: false, reason: 'id not found', id: arg };
     try { it.scrollIntoView({ block: 'center' }); } catch (e) { /* ignore */ }
     const clickable = it.querySelector('a,button,[role="link"],[tabindex]') || it;
     clickable.click();
-    return { ok: true, id: it.id || null, label: (it.textContent || '').trim().slice(0, 80) };
+    return { ok: true, id: arg, label: (it.textContent || '').trim().slice(0, 80) };
+  }
+
+  // Clique le contrôle "Voir plus" du bloc Discussions (pour charger les
+  // discussions masquées). Renvoie { ok } selon qu'un contrôle a été trouvé.
+  function frameClickVoirPlus() {
+    function visible(el) {
+      const r = el.getBoundingClientRect();
+      return r.width > 0 && r.height > 0;
+    }
+    const TEAMS_MARKERS = ['afficher tous les canaux', 'voir toutes vos équipes', 'show all channels', 'see all your teams'];
+    const SEE_MORE = ['voir plus', 'afficher plus', 'see more'];
+    const all = Array.from(document.querySelectorAll('[role="treeitem"]'));
+    for (const el of all) {
+      if (!visible(el)) continue;
+      if (el.querySelector('[role="treeitem"]')) continue;
+      const low = (el.textContent || '').trim().toLowerCase().replace(/\s*\d+$/, '').trim();
+      if (TEAMS_MARKERS.some(m => low.startsWith(m))) break; // ne pas aller dans Équipes
+      if (SEE_MORE.some(c => low.startsWith(c))) {
+        const clickable = el.querySelector('a,button,[role="link"],[tabindex]') || el;
+        clickable.click();
+        return { ok: true, label: (el.textContent || '').trim().slice(0, 40) };
+      }
+    }
+    return { ok: false };
   }
 
   // Clique sur le premier élément visible dont le texte/aria correspond
@@ -481,18 +505,35 @@ document.addEventListener('DOMContentLoaded', () => {
   // Orchestration AUTOMATIQUE — scan de TOUTES les discussions
   // ============================================================
 
-  const MAX_CHATS = 50; // garde-fou contre les listes très longues
+  const MAX_CHATS = 250; // garde-fou (after "Voir plus", la liste peut être longue)
+  const MAX_EXPAND = 20; // nombre max de clics sur "Voir plus"
+
+  // Déplie le bloc Discussions en cliquant "Voir plus" jusqu'à épuisement,
+  // afin de charger les discussions masquées avant le scan.
+  async function expandChatList(tabId) {
+    for (let i = 0; i < MAX_EXPAND; i++) {
+      let res;
+      try { res = await runInFrame(tabId, 0, frameClickVoirPlus); } catch (e) { break; }
+      if (!res || !res.ok) break;
+      showStatus(`Chargement des discussions… (${i + 1})`, 'loading');
+      await sleepMs(1500);
+    }
+  }
 
   // Tente d'ouvrir récapitulatif + transcript puis d'extraire le transcript
   // de la discussion actuellement ouverte. Renvoie {title, entries} ou null.
+  // Skip rapide : si ni récapitulatif ni transcript ne sont cliquables, la
+  // discussion n'a pas de transcript → on n'attend pas inutilement.
   async function tryExtractCurrent(tabId, tabUrl) {
-    // Ouvrir le récapitulatif de réunion (si présent)
-    await clickAcrossFrames(tabId, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
-    await sleepMs(2500);
+    const recap = await clickAcrossFrames(tabId, ['récapitulatif', 'recapitulatif', 'recap', 'récap']);
+    if (recap.ok) await sleepMs(3000);
 
-    // Ouvrir l'onglet Transcript (si présent)
-    await clickAcrossFrames(tabId, ['transcript', 'transcription']);
-    await sleepMs(2500);
+    const transcript = await clickAcrossFrames(tabId, ['transcript', 'transcription']);
+    if (transcript.ok) {
+      await sleepMs(3000);
+    } else if (!recap.ok) {
+      return null; // ni récap ni transcript → skip rapide
+    }
 
     const { bestFrame, bestScore } = await findTranscriptFrame(tabId);
     if (!bestFrame || bestScore < 3) return null;
@@ -522,9 +563,12 @@ document.addEventListener('DOMContentLoaded', () => {
     try {
       const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
 
+      // Déplie "Voir plus" pour charger toutes les discussions masquées
+      await expandChatList(tab.id);
+
       // Énumère toutes les discussions de la sidebar
       showStatus('Lecture des discussions…', 'loading');
-      const list = await runInFrame(tab.id, 0, frameChats, ['list', 0]);
+      const list = await runInFrame(tab.id, 0, frameChats, ['list', null]);
       console.log('chat list:', list);
 
       if (!list || !list.ok || !list.items.length) {
@@ -532,18 +576,19 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
 
-      const total = Math.min(list.items.length, MAX_CHATS);
+      const items = list.items.slice(0, MAX_CHATS);
+      const total = items.length;
       const seenTitles = new Set();
       let downloaded = 0;
 
       for (let i = 0; i < total; i++) {
-        const label = list.items[i].label || `discussion ${i + 1}`;
+        const label = items[i].label || `discussion ${i + 1}`;
         showStatus(`Discussion ${i + 1}/${total} : ${label}`, 'loading');
 
-        // Ouvre la i-ème discussion
-        const clickRes = await runInFrame(tab.id, 0, frameChats, ['click', i]);
+        // Ouvre la discussion par son id (robuste aux re-rendus)
+        const clickRes = await runInFrame(tab.id, 0, frameChats, ['click', items[i].id]);
         if (!clickRes || !clickRes.ok) {
-          console.log(`skip ${i}: click failed`, clickRes);
+          console.log(`skip ${label}: click failed`, clickRes);
           continue;
         }
         await sleepMs(2500);

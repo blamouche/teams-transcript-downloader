@@ -106,3 +106,23 @@
   Debug DOM (section `__chatCandidates`) pour confirmer le filtrage.
 - Next : commit `fix(v2): target real Teams sidebar treeitems, filter nav`
   puis push.
+
+## 2026-06-16 15:40 — agent (Claude)
+
+- Action : 2e Debug DOM reçu (`__chatCandidates`). Filtrage confirmé. Faits :
+  chats = feuilles avec `id` (menur…) + avatar (hasImg true) ; zone Équipes
+  commence après "Voir plus66" (items sans avatar / `id` nul) ; contrôles
+  "Voir plus", "Afficher tous les canaux", "Voir toutes vos équipes" = `id`
+  null. → `frameChats` réécrit : collecte id+avatar, break aux marqueurs
+  Équipes ; **clic par id** (getElementById). Ajout `frameClickVoirPlus` +
+  `expandChatList` (déplie jusqu'à 20×) pour charger les ~66 discussions
+  masquées. Plafond 250. `tryExtractCurrent` : skip rapide si ni récap ni
+  transcript.
+- Décisions utilisateur : toutes les discussions (hors canaux) ; ouvrir et
+  tester chacune (pas de confirmation).
+- Fichiers : `v2/popup.js`, `README.md`, `.prompt-hub/version.md`
+  (0.1.3 → 0.1.4), `.prompt-hub/releases.md`.
+- Outcome : success. À valider en réel (ouverture récap/transcript par chat,
+  durée du scan complet).
+- Next : commit `feat(v2): expand chat list, click by id, scan all chats`
+  puis push.

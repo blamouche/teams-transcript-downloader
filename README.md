@@ -28,7 +28,7 @@ Quand le switch **Automatisation** est activé, la V2 **scanne toutes les discus
 3. tentative de clic sur l'onglet **Transcript** ;
 4. si un transcript est détecté, extraction (même moteur que la V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements (`saveAs:false`, sans boîte de dialogue).
 
-Les discussions sans transcript sont ignorées, les transcripts en double (même titre + même nombre d'entrées) ne sont téléchargés qu'une fois, et le scan est plafonné à 50 discussions. Activer le switch lance immédiatement le scan ; le bouton **« Scanner toutes les discussions »** permet de le relancer.
+Le scan déplie d'abord « Voir plus » pour charger les discussions masquées, puis cible le bloc **Discussions** (treeitems avec avatar, hors navigation et hors canaux d'équipe). Les discussions sans récapitulatif/transcript sont ignorées (skip rapide), les transcripts en double (même titre + même nombre d'entrées) ne sont téléchargés qu'une fois, et le scan est plafonné à 250 discussions. Activer le switch lance immédiatement le scan ; le bouton **« Scanner toutes les discussions »** permet de le relancer.
 
 Si l'automatisation est désactivée (ou en cas d'échec), le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur le panneau Transcript déjà ouvert.
 

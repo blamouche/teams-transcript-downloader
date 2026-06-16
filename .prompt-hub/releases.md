@@ -1,5 +1,20 @@
 # Releases
 
+## 0.1.4 — 2026-06-16
+
+- **V2 / scan fiabilisé** (2e debug réel). Le bloc Discussions est isolé
+  proprement : chats = treeitems feuilles **avec `id` + avatar**, arrêt au 1er
+  marqueur de la zone Équipes (« Afficher tous les canaux », « Voir toutes vos
+  équipes ») ; canaux (sans avatar) et contrôles (`id` nul) écartés.
+- **Clic par `id`** (`getElementById`) au lieu de l'index → robuste aux
+  re-rendus / virtualisation.
+- **Dépliage « Voir plus »** (`frameClickVoirPlus`, jusqu'à 20 fois) pour charger
+  les discussions masquées avant le scan. Plafond porté à 250.
+- **Skip rapide** dans `tryExtractCurrent` : si ni récapitulatif ni transcript
+  ne sont cliquables, la discussion est ignorée sans attente.
+- Décisions utilisateur : périmètre = toutes les discussions (hors canaux) ;
+  pas d'étape de confirmation (ouvrir et tester chacune).
+
 ## 0.1.3 — 2026-06-16
 
 - **V2 / sélecteurs réels** : exploitation du diagnostic *Debug DOM* fourni par
