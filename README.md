@@ -37,7 +37,7 @@ Déroulé du scan, pour chaque discussion du bloc **Discussions** :
 4. tentative d'ouverture du **récapitulatif** puis de l'onglet **Transcript** (skip rapide si aucun) ;
 5. si un transcript est détecté, extraction (moteur V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements.
 
-Les transcripts en double (même titre + même nombre d'entrées) ne sont téléchargés qu'une fois. La popup affiche l'état/progression en direct (lu dans `chrome.storage.local`, clé `scanState`).
+Les transcripts déjà traités ne sont **pas re-téléchargés** : une signature de contenu (`titre|nb entrées|hash du texte`, stable entre cycles et sessions) est mémorisée dans `chrome.storage.local` (`processedKeys`) et vérifiée avant chaque téléchargement. Le bilan de fin indique « X nouveau(x), Y déjà traité(s) », et le bouton **« Réinitialiser l'historique »** vide cette mémoire. La popup affiche l'état/progression en direct (lu dans `chrome.storage.local`, clé `scanState`).
 
 > Note technique : le service worker n'ayant pas de DOM, le téléchargement se fait via une **`data:` URL** (et non `URL.createObjectURL`).
 

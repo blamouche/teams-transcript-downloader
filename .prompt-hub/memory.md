@@ -190,3 +190,19 @@
   FF #2 Soheir, Bi-weekly AI F, G5 Weekly… et exclut personnes/groupes).
 - Next : commit `feat(v2): meetings-only filter via avatar icon signal` puis
   push.
+
+## 2026-06-16 17:35 — agent (Claude)
+
+- Action : Question utilisateur — gestion des réunions déjà traitées. Constat :
+  dédup uniquement intra-scan → la boucle re-téléchargeait tout. Ajout d'un
+  historique persistant `processedKeys` (chrome.storage.local), clé = signature
+  de CONTENU `titre|nbEntrées|hash(texte)` (stable entre sessions, contrairement
+  aux id sidebar). Vérifiée avant download, persistée au fil de l'eau. Bilan
+  « X nouveau(x), Y déjà traité(s) ». Bouton popup « Réinitialiser l'historique »
+  + message `resetHistory`. Extension 2.2.0 → 2.3.0.
+- Fichiers : `v2/background.js`, `v2/popup.{html,js}`, `v2/manifest.json`,
+  `.prompt-hub/version.md` (0.1.7 → 0.1.8), `.prompt-hub/releases.md`,
+  `README.md`.
+- Validation : `node --check` OK.
+- Next : commit `feat(v2): persist processed transcripts to skip re-downloads`
+  puis push.

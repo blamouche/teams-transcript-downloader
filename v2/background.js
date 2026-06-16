@@ -494,6 +494,32 @@ async function downloadTxt(transcript) {
 }
 
 // ============================================================
+// Historique des transcripts déjà traités (persistant)
+//   Clé = signature de CONTENU (titre + nb entrées + hash du texte), stable
+//   entre cycles et sessions (les id de la sidebar, eux, changent à chaque
+//   session). Évite de re-télécharger la même réunion à chaque boucle.
+// ============================================================
+
+function hashStr(s) {
+  let h = 0;
+  for (let i = 0; i < s.length; i++) { h = (Math.imul(h, 31) + s.charCodeAt(i)) | 0; }
+  return h >>> 0;
+}
+
+function transcriptKey(t) {
+  const body = t.entries.map(e => `${e.speaker}:${e.message}`).join('\n');
+  return `${t.title}|${t.entries.length}|${hashStr(body)}`;
+}
+
+async function getProcessed() {
+  return (await chrome.storage.local.get('processedKeys')).processedKeys || {};
+}
+
+async function saveProcessed(map) {
+  await chrome.storage.local.set({ processedKeys: map });
+}
+
+// ============================================================
 // Orchestration du scan
 // ============================================================
 
@@ -550,8 +576,9 @@ async function startScan(reason = 'manual') {
 
     const items = list.items.slice(0, Math.max(1, maxChats));
     const total = items.length;
-    const seenTitles = new Set();
+    const processed = await getProcessed(); // historique persistant
     let downloaded = 0;
+    let skipped = 0;
     await setState({ phase: 'scanning', total });
 
     for (let i = 0; i < total; i++) {
@@ -569,15 +596,22 @@ async function startScan(reason = 'manual') {
       try { transcript = await tryExtractCurrent(tabId, TEAMS_URL); } catch (e) { transcript = null; }
       if (!transcript) continue;
 
-      const key = `${transcript.title}|${transcript.entries.length}`;
-      if (seenTitles.has(key)) continue;
-      seenTitles.add(key);
+      const key = transcriptKey(transcript);
+      if (processed[key]) { // déjà traité lors d'un cycle/session précédent
+        skipped++;
+        continue;
+      }
 
-      try { await downloadTxt(transcript); downloaded++; } catch (e) { /* ignore download error */ }
+      try {
+        await downloadTxt(transcript);
+        downloaded++;
+        processed[key] = Date.now();
+        await saveProcessed(processed); // persiste au fil de l'eau (survit à l'arrêt du SW)
+      } catch (e) { /* ignore download error */ }
       await setState({ downloaded, message: `Téléchargé : ${transcript.title} (${transcript.entries.length}) — ${downloaded} au total` });
     }
 
-    await setState({ running: false, phase: 'done', downloaded, message: `Terminé : ${downloaded} transcript(s) sur ${total} discussions.` });
+    await setState({ running: false, phase: 'done', downloaded, message: `Terminé : ${downloaded} nouveau(x), ${skipped} déjà traité(s), sur ${total} discussions.` });
     // Boucle d'automatisation : si toujours activée et non arrêtée, on relance
     // après une pause d'1 minute.
     const { autoEnabled } = await getSettings();
@@ -678,6 +712,12 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         extractManualActiveTab();
         sendResponse({ ok: true });
         break;
+      case 'resetHistory': {
+        await chrome.storage.local.remove('processedKeys');
+        await setState({ phase: 'idle', message: 'Historique réinitialisé : tout sera re-téléchargé au prochain scan.' });
+        sendResponse({ ok: true });
+        break;
+      }
       case 'autoEnabledChanged':
         if (msg.enabled) {
           // Démarrage immédiat ; la boucle se replanifie ensuite (pause 1 min).

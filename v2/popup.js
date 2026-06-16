@@ -12,6 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const stopBtn = document.getElementById('stop-btn');
   const extractBtn = document.getElementById('extract-btn');
   const debugBtn = document.getElementById('debug-btn');
+  const resetBtn = document.getElementById('reset-btn');
   const statusMessage = document.getElementById('status-message');
   const progressWrap = document.getElementById('progress-wrap');
   const progressBar = document.getElementById('progress-bar');
@@ -104,6 +105,11 @@ document.addEventListener('DOMContentLoaded', () => {
   autoBtn.addEventListener('click', () => send('start'));
   stopBtn.addEventListener('click', () => send('stop'));
   extractBtn.addEventListener('click', () => send('extractManual'));
+  resetBtn.addEventListener('click', async () => {
+    if (confirm('Réinitialiser l\'historique ? Les transcripts déjà traités seront re-téléchargés au prochain scan.')) {
+      await send('resetHistory');
+    }
+  });
   debugBtn.addEventListener('click', async () => {
     showStatus('Debug en cours…', 'loading');
     const resp = await send('debug');

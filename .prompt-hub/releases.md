@@ -1,5 +1,18 @@
 # Releases
 
+## 0.1.8 — 2026-06-16
+
+- **V2 / historique persistant des transcripts traités** (extension 2.2.0 →
+  2.3.0). Avant : déduplication seulement à l'intérieur d'un scan → la boucle
+  d'1 min re-téléchargeait les mêmes réunions à chaque cycle. Désormais une
+  signature de **contenu** (`titre|nb entrées|hash du texte`, stable entre
+  cycles et sessions contrairement aux id de sidebar) est stockée dans
+  `chrome.storage.local` (`processedKeys`) et vérifiée avant chaque
+  téléchargement ; les transcripts déjà traités sont ignorés.
+- Persistance au fil de l'eau (survit à l'arrêt du service worker). Bilan de
+  fin enrichi : « X nouveau(x), Y déjà traité(s) ».
+- Bouton **« Réinitialiser l'historique »** (popup) + message `resetHistory`.
+
 ## 0.1.7 — 2026-06-16
 
 - **V2 / filtre « Réunions uniquement »** (extension 2.1.0 → 2.2.0, activé par
