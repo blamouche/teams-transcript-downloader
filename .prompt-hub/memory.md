@@ -275,6 +275,16 @@
 - Validation : `node --check` OK.
 - Next : commit `feat(v2): persistent end-of-scan summary panel` puis push.
 
+## 2026-06-16 20:47 — agent (Claude)
+
+- Action : Masquage des boutons de debug « Debug DOM » et « Debug réunion » dans
+  la popup V2 (conservés dans le DOM pour réactivation ultérieure).
+- Fichiers modifiés : `v2/popup.html`, `.prompt-hub/version.md` (0.1.14 → 0.1.15),
+  `.prompt-hub/releases.md`, `.prompt-hub/todo/todo-20260616-204741-hide-debug-buttons.md`.
+- Validation : vérification visuelle du HTML ; aucun JS impacté.
+- Outcome : success.
+- Next : commit `feat(v2): hide debug buttons in popup` puis push.
+
 ## 2026-06-16 20:42 — agent (Claude)
 
 - Action : Adaptation du libellé sous le switch « Automatisation » pour refléter

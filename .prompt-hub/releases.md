@@ -1,5 +1,12 @@
 # Releases
 
+## 0.1.15 — 2026-06-16
+
+- **V2 / UI : masquage des boutons de debug**. Les boutons « Debug DOM » et
+  « Debug réunion » dans la popup sont désormais cachés (`class="hidden"`).
+  Ils restent dans le DOM et les gestionnaires dans `popup.js` sont inchangés,
+  ce qui permet de les réactiver facilement si besoin.
+
 ## 0.1.14 — 2026-06-16
 
 - **V2 / libellé d’automatisation dynamique** (extension inchangée 2.5.0). Le
