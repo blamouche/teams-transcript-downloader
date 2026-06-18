@@ -596,3 +596,19 @@
 - Validation : node --check OK. À tester.
 - Outcome : success (attente validation).
 - Next : commit `feat(v3): overlay follows automation state; separate non-blocking guide` + push.
+
+## 2026-06-18 (14) — agent (Claude)
+
+- Action : V3 — le guide ne s'affichait pas au chargement de l'onglet. Cause :
+  showGuide/showOverlay appelés juste après chrome.tabs.create (onglet en cours de
+  navigation about:blank→Teams) → injection effacée. Fix : appliquer l'habillage
+  dans chrome.tabs.onUpdated (status complete) pour l'onglet piloté — auto ON →
+  showOverlay+hideGuide ; OFF → hideOverlay+showGuide. Retrait des appels prématurés
+  dans la branche création de ensureTeamsTab.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.10→3.0.11),
+  .prompt-hub/version.md (0.2.10→0.2.11), releases.md.
+- Validation : node --check OK. À tester.
+- Leçon : ne pas injecter le voile/guide sur un onglet juste créé (encore en
+  navigation) ; attendre onUpdated 'complete'.
+- Outcome : success (attente validation).
+- Next : commit `fix(v3): apply overlay/guide on tab load (onUpdated complete)` + push.

@@ -1,5 +1,15 @@
 # Releases
 
+## 0.2.11 — 2026-06-18
+
+- **V3 / Le guide ne s'affichait pas au chargement de l'onglet**. Le guide (et le
+  voile) étaient injectés juste après `chrome.tabs.create`, alors que l'onglet
+  chargeait encore (about:blank → Teams) : l'injection était effacée par la
+  navigation. Désormais l'habillage est appliqué quand la page a **fini de charger**,
+  dans `chrome.tabs.onUpdated` (statut `complete`) pour l'onglet piloté :
+  automatisation ON → voile bloquant ; OFF → guide « cliquez à nouveau » non
+  bloquant. Manifest 3.0.10 → 3.0.11.
+
 ## 0.2.10 — 2026-06-18
 
 - **V3 / Voile gris piloté par l'automatisation + guide séparé**. Le voile

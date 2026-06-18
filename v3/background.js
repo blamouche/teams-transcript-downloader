@@ -856,11 +856,9 @@ async function ensureTeamsTab() {
   // Active le panneau pour ce nouvel onglet (indispensable sans default_path pour
   // que sidePanel.open() ait un contenu à afficher).
   try { await chrome.sidePanel.setOptions({ tabId: created.id, path: 'panel.html', enabled: true }); } catch (e) { /* ignore */ }
-  // Automatisation ON → voile bloquant. OFF → seulement le guide « cliquez à
-  // nouveau » (non bloquant) pour laisser naviguer dans Teams manuellement.
-  const { autoEnabled } = await getSettings();
-  if (autoEnabled) showOverlay(created.id).catch(() => {});
-  else showGuide(created.id).catch(() => {});
+  // L'onglet vient d'être créé et charge encore : le voile/guide sont appliqués
+  // quand la page a fini de charger, via chrome.tabs.onUpdated (sinon l'injection
+  // serait effacée par la navigation vers Teams).
   return created.id;
 }
 
@@ -1213,11 +1211,15 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' || changeInfo.url) syncSidePanel(tab).catch(() => {});
-  // Un rechargement de l'onglet piloté efface le voile/guide injectés : on les
-  // réapplique quand la page a fini de charger (la navigation SPA ne recharge pas →
-  // le MutationObserver suffit dans ce cas). Le voile suit l'état de l'automatisation.
+  // Quand l'onglet piloté a fini de charger (création initiale ou rechargement),
+  // on applique l'habillage : automatisation ON → voile bloquant ; OFF → guide
+  // non bloquant « cliquez à nouveau » (et pas de voile, pour naviguer librement).
   if (changeInfo.status === 'complete' && tabId === dedicatedTabId) {
-    refreshOverlay(tabId).catch(() => {});
+    (async () => {
+      const { autoEnabled } = await getSettings();
+      if (autoEnabled) { await showOverlay(tabId); await hideGuide(tabId); }
+      else { await hideOverlay(tabId); await showGuide(tabId); }
+    })().catch(() => {});
   }
 });
 
