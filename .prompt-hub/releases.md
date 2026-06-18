@@ -1,5 +1,16 @@
 # Releases
 
+## 0.2.18 — 2026-06-18
+
+- **V3 / Récapitulatif masqué par un nom de réunion long**. Quand le titre est long,
+  Teams replie les onglets (Conversation, Partagé, Récapitulatif…) dans un menu de
+  débordement « +N » : l'onglet Récapitulatif n'était pas cliquable → « sans
+  transcript ». Nouvelle fonction `frameOpenRecap` : clic direct si l'onglet est
+  visible, sinon ouverture du menu « +N » (texte `+\d+`, aria « plus d'onglets »,
+  data-tid overflow) puis clic sur « Récapitulatif » (data-tid ou texte). Utilisée
+  dans `tryExtractCurrent` ; `lastDiag.recapVia` indique la voie empruntée. Manifest
+  3.0.16 → 3.0.17.
+
 ## 0.2.17 — 2026-06-18
 
 - **V3 / Statut « erreur » distinct + logs de debug par run**.

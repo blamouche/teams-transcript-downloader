@@ -635,6 +635,57 @@ function frameClickTid(tid) {
   return { ok: true, tid };
 }
 
+// Ouvre l'onglet « Récapitulatif ». Quand le nom de la réunion est long, les onglets
+// (Conversation, Partagé, Récapitulatif…) sont repliés dans un menu de débordement
+// « +N » → l'onglet recap n'est pas directement cliquable. On l'ouvre alors d'abord,
+// puis on clique Récapitulatif dans le menu.
+function frameOpenRecap() {
+  return (async () => {
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function vis(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+    function clickEl(el) { (el.querySelector('a,button,[role="tab"],[role="link"],[role="menuitem"],[tabindex]') || el).click(); }
+    const RECAP_KW = ['récapitulatif', 'recapitulatif', 'recap', 'récap'];
+
+    // 1) Onglet Récapitulatif directement visible.
+    let recap = document.querySelector('[data-tid="tab-item-com.microsoft.chattabs.recap"]');
+    if (recap && vis(recap)) { clickEl(recap); return { ok: true, via: 'direct' }; }
+
+    // 2) Sinon, ouvrir le menu de débordement d'onglets ("+N" / "Plus d'onglets").
+    function findOverflow() {
+      const cands = document.querySelectorAll('button,[role="button"],[role="tab"],[aria-haspopup],[data-tid]');
+      for (const el of cands) {
+        if (!vis(el)) continue;
+        const txt = (el.textContent || '').trim();
+        const aria = (((el.getAttribute && el.getAttribute('aria-label')) || '')).toLowerCase();
+        const tid = (((el.getAttribute && el.getAttribute('data-tid')) || '')).toLowerCase();
+        if (/^\+\d+$/.test(txt)) return el;                                   // bouton "+3"
+        if (/(plus d.onglet|autres onglet|more tab|overflow|more items|plus d.[ée]l[ée])/.test(aria)) return el;
+        if (/overflow|moreoptions|tablist.*more|more.*tab/.test(tid)) return el;
+      }
+      return null;
+    }
+    const of = findOverflow();
+    if (!of) return { ok: false, reason: 'overflow not found' };
+    clickEl(of);
+    await sleep(800);
+
+    // 3) Cliquer « Récapitulatif » dans le menu ouvert (data-tid si présent, sinon texte).
+    recap = document.querySelector('[data-tid="tab-item-com.microsoft.chattabs.recap"]');
+    if (recap && vis(recap)) { clickEl(recap); return { ok: true, via: 'overflow-tid' }; }
+    const items = document.querySelectorAll('[role="menuitem"],[role="menuitemradio"],[role="option"],[role="tab"],button,a');
+    for (const el of items) {
+      if (!vis(el)) continue;
+      const t = (el.textContent || '').trim().toLowerCase();
+      const a = (((el.getAttribute && el.getAttribute('aria-label')) || '')).toLowerCase();
+      if (RECAP_KW.some(k => (t.length <= 40 && t.includes(k)) || a.includes(k))) {
+        clickEl(el);
+        return { ok: true, via: 'overflow-text', matched: (t || a).slice(0, 40) };
+      }
+    }
+    return { ok: false, reason: 'recap item not found in overflow menu' };
+  })();
+}
+
 // Réunions récurrentes : le récap affiche un sélecteur d'instance (date/heure)
 // qu'il faut positionner sur l'occurrence PASSÉE la plus récente avant d'extraire,
 // sinon on récupère le transcript d'une autre occurrence (ou rien).
@@ -1036,8 +1087,9 @@ async function tryExtractCurrent(tabId, tabUrl, gen) {
   if (r.transcript) { lastDiag = { path: 'direct', instance, bestScore: r.bestScore }; return r.transcript; }
   if (scanGen !== gen) return null;
 
-  // 2) repli : onglet Récapitulatif puis sous-onglet Transcript (data-tid)
-  const recap = await runInFrame(tabId, 0, frameClickTid, ['tab-item-com.microsoft.chattabs.recap']);
+  // 2) repli : onglet Récapitulatif (en dépliant le menu "+N" si le nom de réunion
+  //    est long et masque l'onglet), puis sous-onglet Transcript (data-tid).
+  const recap = await runInFrame(tabId, 0, frameOpenRecap);
   await sleepCancellable(4000, gen);
   if (scanGen !== gen) return null;
   const tr = await runInFrame(tabId, 0, frameClickTid, ['Transcript']);
@@ -1055,6 +1107,7 @@ async function tryExtractCurrent(tabId, tabUrl, gen) {
   lastDiag = {
     path: 'after-tabs',
     recapTab: !!(recap && recap.ok),
+    recapVia: recap ? (recap.via || recap.reason || null) : null,
     transcriptTab: !!(tr && tr.ok),
     instance: instance || null,
     bestScore: r.bestScore,
