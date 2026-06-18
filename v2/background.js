@@ -309,23 +309,37 @@ function frameFullExtract() {
     await sleep(600);
     collect();
 
-    // Défilement par paliers ; on ne s'arrête que lorsque le nombre d'entrées
-    // est STABLE plusieurs fois ET qu'on est arrivé en bas (lignes virtualisées
-    // chargées au fur et à mesure). Attentes généreuses pour le rendu lazy.
+    // Défilement par paliers. La liste est VIRTUALISÉE : piloter `scrollTop` en
+    // absolu est fragile car le composant recalcule sa hauteur quand de nouvelles
+    // cellules se chargent et remet alors `scrollTop` à 0 (« décrochage » → on
+    // repart du haut en boucle). On ancre donc le défilement sur la DERNIÈRE
+    // cellule rendue via `scrollIntoView` : on vise un nœud réel, c'est
+    // auto-correctif (si le framework saute en haut, on re-descend vers elle).
+    // Critère d'arrêt : plus aucune nouvelle entrée après plusieurs paliers.
+    function lastCell() {
+      let cells = container.querySelectorAll('[data-automationid="ListCell"], [role="listitem"]');
+      if (!cells.length) cells = container.children;
+      return cells.length ? cells[cells.length - 1] : null;
+    }
+
     let stable = 0;
     let lastCount = -1;
-    for (let i = 0; i < 800; i++) {
+    for (let i = 0; i < 400; i++) {
       // Arrêt demandé depuis le service worker : on stoppe le défilement immédiatement.
       try { if (window.__ttdAbort) break; } catch (e) { /* ignore */ }
       collect();
       if (allEntries.length === lastCount) stable++;
       else { stable = 0; lastCount = allEntries.length; }
+      if (stable >= 8) break; // plus de nouvelles entrées : on a tout balayé
 
-      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 5;
-      if (stable >= 8 && atBottom) break;
-
-      const step = Math.max(200, Math.floor(scroller.clientHeight * 0.8));
-      scroller.scrollTop = Math.min(scroller.scrollHeight, scroller.scrollTop + step);
+      const last = lastCell();
+      if (last && last.scrollIntoView) {
+        try { last.scrollIntoView({ block: 'end' }); } catch (e) { /* ignore */ }
+      } else {
+        // repli si aucune cellule ciblable : poussée relative classique
+        const step = Math.max(200, Math.floor(scroller.clientHeight * 0.8));
+        scroller.scrollTop = Math.min(scroller.scrollHeight, scroller.scrollTop + step);
+      }
       await sleep(600);
     }
 

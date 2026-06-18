@@ -394,3 +394,17 @@
   les options rendues sont lues ; la plus récente est généralement en haut donc OK.
 - Outcome : success.
 - Next : commit `feat(v2): pick latest instance for recurring meetings` puis push.
+
+## 2026-06-18 (2) — agent (Claude)
+
+- Action : Correction du « décrochage » du scroll pendant l'extraction. La boucle
+  de `frameFullExtract` pilotait `scrollTop += step` ; la liste virtualisée
+  (.ms-List) remet scrollTop à 0 lors des recalculs de hauteur → on repartait du
+  haut en boucle. Remplacé par un ancrage sur la dernière cellule rendue
+  (`scrollIntoView({block:'end'})`), auto-correctif, avec repli relatif si aucune
+  cellule. Arrêt sur stabilité du nombre d'entrées (stable>=8) ; max 800→400 iters.
+- Fichiers modifiés : `v2/background.js`, `.prompt-hub/version.md` (0.1.21 →
+  0.1.22), `.prompt-hub/releases.md`.
+- Validation : `node --check v2/background.js` OK. Pas de test navigateur.
+- Outcome : success.
+- Next : commit `fix(v2): robust scroll for virtualized transcript list` puis push.

@@ -1,5 +1,17 @@
 # Releases
 
+## 0.1.22 — 2026-06-18
+
+- **V2 / Extraction : défilement robuste de la liste virtualisée**. La boucle de
+  scroll pilotait `scrollTop` en absolu (`scrollTop += step`). Sur la liste de
+  transcript virtualisée (`.ms-List`), le composant recalcule sa hauteur au fur et
+  à mesure des chargements et remet `scrollTop` à 0 → « décrochage » : le scroll
+  repartait du haut et la boucle tournait jusqu'à 800 fois sans atteindre le bas.
+  Désormais le défilement s'ancre sur la DERNIÈRE cellule rendue via
+  `scrollIntoView({block:'end'})` (nœud réel, auto-correctif face aux sauts de
+  scroll), avec arrêt dès que plus aucune nouvelle entrée n'apparaît après
+  plusieurs paliers (max ramené de 800 à 400 itérations).
+
 ## 0.1.21 — 2026-06-18
 
 - **V2 / Réunions récurrentes : sélection de l'occurrence la plus récente**. Le
