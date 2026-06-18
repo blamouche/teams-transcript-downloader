@@ -1,5 +1,19 @@
 # Releases
 
+## 0.2.13 — 2026-06-18
+
+- **V2 & V3 / Déduplication plus robuste (transcripts re-téléchargés)**. L'ancienne
+  clé `titre | nb entrées | hash de tout le corps` était fragile : la fin du
+  transcript peut être tronquée différemment d'un scan à l'autre (défilement
+  virtualisé / lazy-load) et le titre peut basculer vers le libellé par défaut
+  « Meeting Transcript » → la clé changeait → re-téléchargement. Nouvelle clé =
+  empreinte des **20 premières entrées** (locuteur + message normalisé), toujours
+  extraites de façon fiable car l'extraction part du haut ; titre et total ignorés.
+  `v2/manifest.json` 2.5.0 → 2.5.1, `v3/manifest.json` 3.0.11 → 3.0.12.
+- Note : le format de clé change → au 1er scan après mise à jour, les transcripts
+  déjà connus sont re-téléchargés une dernière fois, puis l'historique redevient
+  stable.
+
 ## 0.2.12 — 2026-06-18
 
 - **CI / Release : le build de package couvre désormais V3**. Le workflow
