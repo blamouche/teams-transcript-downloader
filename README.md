@@ -243,7 +243,7 @@ Le bouton **Debug DOM** du popup déclenche `debugDOM()` : pour chaque frame, il
 │   ├── panel.js       # Télécommande (identique au principe V2)
 │   └── icons/
 ├── README.md
-├── .github/workflows/ # Workflows GitHub Actions (release automatique des 2 versions)
+├── .github/workflows/ # Workflows GitHub Actions (release automatique des 3 versions)
 └── .prompt-hub/       # Mémoire, lessons, version, releases (workflow prompt-hub)
 ```
 
@@ -293,20 +293,21 @@ La publication des releases est entièrement automatisée par le workflow
 
 ### Déclencher une release
 
-1. Mettre à jour la version dans `v1/manifest.json` / `v2/manifest.json` si nécessaire.
+1. Mettre à jour la version dans `v1/manifest.json` / `v2/manifest.json` /
+   `v3/manifest.json` si nécessaire.
 2. Créer un tag versionné (préfixe `v`) et le pousser :
    ```bash
-   git tag v2.0.0
-   git push origin v2.0.0
+   git tag v3.0.0
+   git push origin v3.0.0
    ```
 3. Le workflow GitHub Actions s'exécute automatiquement :
-   - construit, pour **chaque version**, un dossier temporaire ne contenant que
-     les fichiers nécessaires à l'extension (`manifest.json`, `content.js`,
-     `popup.html`, `popup.css`, `popup.js`, `icons/icon{16,48,128}.png`),
-   - les zippe sous `teams-transcript-downloader-v1-<tag>.zip` et
-     `teams-transcript-downloader-v2-<tag>.zip`,
-   - crée une release GitHub portant le nom du tag, avec les deux zips en assets
-     et des notes de release auto-générées (`generate_release_notes`).
+   - construit, pour **chaque version présente** (`v1`, `v2`, `v3`), un dossier
+     temporaire reprenant l'intégralité des fichiers de la version (manifest, JS,
+     HTML/CSS — `popup.*` pour v1/v2, `panel.*` pour v3 —, `background.js` le cas
+     échéant, et `icons/`),
+   - les zippe sous `teams-transcript-downloader-v{1,2,3}-<tag>.zip`,
+   - crée une release GitHub portant le nom du tag, avec les zips en assets et des
+     notes de release auto-générées (`generate_release_notes`).
 
 ### Contenu des zips
 

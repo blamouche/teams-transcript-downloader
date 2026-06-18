@@ -612,3 +612,16 @@
   navigation) ; attendre onUpdated 'complete'.
 - Outcome : success (attente validation).
 - Next : commit `fix(v3): apply overlay/guide on tab load (onUpdated complete)` + push.
+
+## 2026-06-18 (15) — agent (Claude)
+
+- Action : CI release.yml — le build ne couvrait que v1/v2 et copiait popup.* en dur
+  (absents de v3). Réécrit : boucle sur v1 v2 v3, cp -R du dossier complet (agnostique
+  aux noms popup.*/panel.* + background.js optionnel), un zip par version, tous publiés
+  en assets via action-gh-release (sortie multiligne `zips`). README mis à jour.
+  Merge de feature/v3-side-panel dans main.
+- Fichiers : .github/workflows/release.yml, README.md, .prompt-hub/version.md
+  (0.2.11→0.2.12), releases.md.
+- Validation : structure YAML OK (pas de linter local). À confirmer au prochain tag.
+- Outcome : success.
+- Next : commit + merge main + push.

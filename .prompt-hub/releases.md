@@ -1,5 +1,14 @@
 # Releases
 
+## 0.2.12 — 2026-06-18
+
+- **CI / Release : le build de package couvre désormais V3**. Le workflow
+  `.github/workflows/release.yml` ne packageait que V1 et V2 et copiait des fichiers
+  `popup.*` codés en dur (absents de V3). Réécrit pour : boucler sur `v1 v2 v3`,
+  copier l'intégralité du dossier de chaque version (agnostique aux noms —
+  `popup.*`/`panel.*`, `background.js` optionnel), produire un zip par version et
+  les publier tous en assets de la release. README mis à jour (3 versions).
+
 ## 0.2.11 — 2026-06-18
 
 - **V3 / Le guide ne s'affichait pas au chargement de l'onglet**. Le guide (et le
