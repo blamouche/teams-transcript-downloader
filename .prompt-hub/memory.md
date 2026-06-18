@@ -484,3 +484,17 @@
   garder les id en mémoire du SW pour cibler une fenêtre sans storage.get préalable.
 - Outcome : success (en attente validation navigateur).
 - Next : commit `fix(v3): open side panel synchronously so it actually shows` + push.
+
+## 2026-06-18 (7) — agent (Claude)
+
+- Action : V3 — le panneau s'ouvrait sur la fenêtre courante (fenêtre 1) au 1er
+  clic. Correctif : action.onClicked ne cible JAMAIS tab.windowId ; uniquement
+  dedicatedWindowId (sync si connu, sinon ensureTeamsTab crée la fenêtre puis
+  tentative d'open() dessus). Si le geste expire après windows.create, un clic
+  depuis la fenêtre Teams affiche le panneau (id alors connu). Comportement validé
+  par l'utilisateur pour les clics dans la fenêtre 2.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.3→3.0.4),
+  .prompt-hub/version.md (0.2.3→0.2.4), releases.md.
+- Validation : node --check OK. À retester en navigateur.
+- Outcome : success (attente validation).
+- Next : commit `fix(v3): only attach side panel to the dedicated Teams window` + push.

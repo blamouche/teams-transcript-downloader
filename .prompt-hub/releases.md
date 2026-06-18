@@ -1,5 +1,15 @@
 # Releases
 
+## 0.2.4 — 2026-06-18
+
+- **V3 / Le panneau ne doit s'attacher qu'à la fenêtre Teams dédiée**. Avant, au
+  1er clic (fenêtre dédiée pas encore créée), le panneau s'ouvrait sur la fenêtre
+  COURANTE (fenêtre 1). Désormais `action.onClicked` ne cible jamais la fenêtre
+  courante : ouverture synchrone sur la fenêtre dédiée si son id est connu, sinon
+  création de la fenêtre puis tentative d'attache du panneau sur elle. Si le geste
+  utilisateur a expiré après `windows.create`, un clic sur l'icône depuis la
+  fenêtre Teams affiche le panneau (id alors connu). Manifest 3.0.3 → 3.0.4.
+
 ## 0.2.3 — 2026-06-18
 
 - **V3 / Correctif : le panneau ne s'affichait jamais (ouverture synchrone)**. En
