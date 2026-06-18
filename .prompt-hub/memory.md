@@ -498,3 +498,19 @@
 - Validation : node --check OK. À retester en navigateur.
 - Outcome : success (attente validation).
 - Next : commit `fix(v3): only attach side panel to the dedicated Teams window` + push.
+
+## 2026-06-18 (8) — agent (Claude)
+
+- Action : V3 — tentative d'ouverture auto du panneau sur la fenêtre dédiée au 1er
+  clic. open() appelé immédiatement après windows.create (1 seul await → meilleure
+  chance de garder le geste) + retry différé 500ms (demande user). Caveat noté :
+  sidePanel.open() exige un geste utilisateur ; l'appel différé (setTimeout) sera
+  probablement refusé par Chrome → fallback = clic depuis la fenêtre Teams.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.4→3.0.5),
+  .prompt-hub/version.md (0.2.4→0.2.5), releases.md.
+- Validation : node --check OK. À tester en navigateur.
+- Leçon clé : un setTimeout avant sidePanel.open() casse le geste utilisateur ;
+  ce n'est pas un problème de timing mais de gesture. Ne pas promettre que l'appel
+  différé fonctionnera.
+- Outcome : success (attente validation).
+- Next : commit `feat(v3): attempt panel open on dedicated window (immediate + 0.5s)` + push.

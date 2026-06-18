@@ -1125,22 +1125,38 @@ chrome.runtime.onStartup.addListener(async () => {
 //     clic l'attachera à la fenêtre Teams, une fois celle-ci créée).
 // Tout le travail asynchrone (création/voile/focus) suit, sans bloquer open().
 chrome.action.onClicked.addListener((tab) => {
-  // Le panneau ne s'attache QU'À la fenêtre Teams dédiée — jamais la fenêtre
-  // courante. Si on connaît déjà son id, ouverture SYNCHRONE (geste préservé).
+  // Le panneau ne s'attache QU'À la fenêtre Teams dédiée — jamais la fenêtre courante.
+
+  // 1) Fenêtre dédiée déjà connue → ouverture SYNCHRONE (geste préservé, fiable).
   if (dedicatedWindowId != null) {
     try { const p = chrome.sidePanel.open({ windowId: dedicatedWindowId }); if (p && p.catch) p.catch(() => {}); }
     catch (e) { /* API indisponible */ }
+    (async () => {
+      const tid = await ensureTeamsTab(); // revalide / recrée si fermée
+      if (dedicatedWindowId != null) chrome.windows.update(dedicatedWindowId, { focused: true }).catch(() => {});
+      if (tid != null) showOverlay(tid).catch(() => {});
+    })().catch(() => {});
+    return;
   }
+
+  // 2) Pas encore de fenêtre dédiée : on la crée, puis on tente d'attacher le
+  //    panneau IMMÉDIATEMENT (un seul await avant open() → meilleure chance de
+  //    conserver le geste utilisateur).
   (async () => {
-    // Crée/réutilise la fenêtre Teams dédiée (+ voile + id en mémoire).
-    await ensureTeamsTab();
-    if (dedicatedWindowId != null) {
-      // 1er clic : la fenêtre vient d'être créée → on tente d'attacher le panneau
-      // tout de suite. Le geste a pu expirer après windows.create ; dans ce cas un
-      // clic sur l'icône depuis la fenêtre Teams l'affichera (id alors connu).
-      try { await chrome.sidePanel.open({ windowId: dedicatedWindowId }); } catch (e) { /* reclic affichera */ }
-      chrome.windows.update(dedicatedWindowId, { focused: true }).catch(() => {});
-    }
+    const created = await chrome.windows.create({ url: TEAMS_URL, focused: true });
+    const winId = created.id;
+    // Tentative immédiate.
+    try { await chrome.sidePanel.open({ windowId: winId }); } catch (e) { /* retry différé ci-dessous */ }
+    const newTabId = created.tabs && created.tabs[0] ? created.tabs[0].id : undefined;
+    await setDedicated(newTabId, winId);
+    await enablePanelForTab(newTabId);
+    // Nouvelle tentative après 0,5 s (laisse la fenêtre s'initialiser). NB : si
+    // Chrome impose le geste utilisateur, cet appel différé peut être refusé ; un
+    // clic sur l'icône depuis la fenêtre Teams affichera alors le panneau.
+    setTimeout(() => {
+      try { const p = chrome.sidePanel.open({ windowId: winId }); if (p && p.catch) p.catch(() => {}); }
+      catch (e) { /* ignore */ }
+    }, 500);
   })().catch(() => {});
 });
 

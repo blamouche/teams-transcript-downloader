@@ -1,5 +1,16 @@
 # Releases
 
+## 0.2.5 — 2026-06-18
+
+- **V3 / Tentatives d'ouverture du panneau sur la fenêtre dédiée (1er clic)**. Au
+  1er clic (fenêtre pas encore créée), on appelle maintenant `sidePanel.open()`
+  IMMÉDIATEMENT après `windows.create` (un seul `await` avant → meilleure chance de
+  conserver le geste utilisateur), au lieu de passer par tout `ensureTeamsTab`. Ajout
+  d'une nouvelle tentative différée de 0,5 s (demande utilisateur). Avertissement :
+  `chrome.sidePanel.open()` exige un geste utilisateur actif ; l'appel différé peut
+  être refusé par Chrome — dans ce cas un clic sur l'icône depuis la fenêtre Teams
+  affiche le panneau. Manifest 3.0.4 → 3.0.5.
+
 ## 0.2.4 — 2026-06-18
 
 - **V3 / Le panneau ne doit s'attacher qu'à la fenêtre Teams dédiée**. Avant, au
