@@ -924,9 +924,12 @@ async function downloadTxt(transcript) {
 
 // ============================================================
 // Historique des transcripts déjà traités (persistant)
-//   Clé = signature de CONTENU (titre + nb entrées + hash du texte), stable
-//   entre cycles et sessions (les id de la sidebar, eux, changent à chaque
-//   session). Évite de re-télécharger la même réunion à chaque boucle.
+//   Clé = empreinte des PREMIÈRES entrées du transcript. L'extraction part toujours
+//   du haut, donc le début est capturé de façon fiable et REPRODUCTIBLE d'un scan à
+//   l'autre — contrairement à la fin (défilement virtualisé / chargement lazy, qui
+//   peut tronquer) ou au titre (parfois remplacé par le libellé par défaut). Baser
+//   la clé sur le début (et l'ignorer titre + total) évite de re-télécharger le même
+//   transcript quand l'extraction varie légèrement.
 // ============================================================
 
 function hashStr(s) {
@@ -935,9 +938,14 @@ function hashStr(s) {
   return h >>> 0;
 }
 
+function normMsg(s) { return (s || '').toLowerCase().replace(/\s+/g, ' ').trim(); }
+
 function transcriptKey(t) {
-  const body = t.entries.map(e => `${e.speaker}:${e.message}`).join('\n');
-  return `${t.title}|${t.entries.length}|${hashStr(body)}`;
+  const entries = t.entries || [];
+  const head = entries.slice(0, 20)
+    .map(e => `${(e.speaker || '').trim().toLowerCase()}:${normMsg(e.message).slice(0, 80)}`)
+    .join('\n');
+  return 'h' + hashStr(head);
 }
 
 async function getProcessed() {

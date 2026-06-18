@@ -625,3 +625,19 @@
 - Validation : structure YAML OK (pas de linter local). À confirmer au prochain tag.
 - Outcome : success.
 - Next : commit + merge main + push.
+
+## 2026-06-18 (16) — agent (Claude)
+
+- Action : V2 & V3 — déduplication re-téléchargeait le même transcript. Cause : clé
+  titre|nbEntrées|hash(corps entier) fragile (fin tronquée variable selon défilement,
+  titre basculant vers "Meeting Transcript"). Nouvelle transcriptKey = empreinte des
+  20 PREMIÈRES entrées (locuteur + normMsg(message) tronqué 80c), titre + total
+  ignorés (le début est extrait de façon fiable car on part du haut). Ajout normMsg.
+  Appliqué à v2 ET v3.
+- Fichiers : v2/background.js, v3/background.js, v2/manifest.json (2.5.0→2.5.1),
+  v3/manifest.json (3.0.11→3.0.12), .prompt-hub/version.md (0.2.12→0.2.13), releases.md.
+- Validation : node --check v2 + v3 OK.
+- Note : changement de format de clé → 1 re-téléchargement final des anciens
+  transcrits au 1er scan post-MAJ, puis stable.
+- Outcome : success.
+- Next : commit sur branche fix + merge main + push.
