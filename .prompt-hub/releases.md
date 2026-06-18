@@ -1,5 +1,17 @@
 # Releases
 
+## 0.2.10 — 2026-06-18
+
+- **V3 / Voile gris piloté par l'automatisation + guide séparé**. Le voile
+  **bloquant** ne s'active plus que quand l'**automatisation est ON** (empêche les
+  clics par erreur pendant le scan) ; **automatisation OFF**, il est retiré pour
+  pouvoir naviguer dans Teams manuellement (`refreshOverlay` appelé sur
+  `autoEnabledChanged`, `stop`, création/rechargement de l'onglet, et au réveil du
+  SW). Le **guide** « cliquez à nouveau sur l'icône » est désormais **séparé** du
+  voile : élément non bloquant (`pointer-events:none`) affiché à la création de
+  l'onglet quand l'automatisation est OFF, masqué dès l'ouverture du panneau
+  (`panelReady` → `pageRemoveGuide`). Manifest 3.0.9 → 3.0.10.
+
 ## 0.2.9 — 2026-06-18
 
 - **V3 / Guide visuel sur le voile : « cliquez à nouveau sur l'icône »**.

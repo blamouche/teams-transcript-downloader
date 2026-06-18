@@ -581,3 +581,18 @@
 - Validation : node --check background + panel OK. À tester en navigateur.
 - Outcome : success (attente validation).
 - Next : commit `feat(v3): on-overlay guide to click the icon again` + push.
+
+## 2026-06-18 (13) — agent (Claude)
+
+- Action : V3 — voile gris piloté par l'automatisation. Voile BLOQUANT seulement si
+  autoEnabled ON ; OFF → retiré (navigation Teams manuelle). refreshOverlay(tabId)
+  (lit autoEnabled → show/hideOverlay) appelé sur autoEnabledChanged, stop, création/
+  reuse/reload d'onglet, init SW. Guide « cliquez à nouveau » SÉPARÉ du voile :
+  pageApplyGuide/pageRemoveGuide (pointer-events:none, non bloquant), affiché à la
+  création quand auto OFF, masqué à l'ouverture du panneau (panelReady → hideGuide).
+  ensureTeamsTab create : si auto ON → showOverlay sinon showGuide (exclusif).
+- Fichiers : v3/background.js, v3/manifest.json (3.0.9→3.0.10), README.md,
+  .prompt-hub/version.md (0.2.9→0.2.10), releases.md.
+- Validation : node --check OK. À tester.
+- Outcome : success (attente validation).
+- Next : commit `feat(v3): overlay follows automation state; separate non-blocking guide` + push.

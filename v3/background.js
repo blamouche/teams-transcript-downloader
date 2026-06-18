@@ -187,38 +187,21 @@ async function updateActionUI(state) {
 //   PAS interceptées par ce voile.
 // ============================================================
 
-// Injecté dans la page (frame 0) : crée le voile (idempotent). Un MutationObserver
-// le réinsère si la SPA Teams le retire lors d'un re-render.
+// --- Voile BLOQUANT (gris) : actif uniquement quand l'automatisation est ON ---
+// Injecté dans la page (frame 0), idempotent. Un MutationObserver le réinsère si la
+// SPA Teams le retire lors d'un re-render. Bloque clic/clavier/scroll de l'utilisateur.
 function pageApplyOverlay() {
   const ID = '__ttd_overlay__';
   if (document.getElementById(ID)) return { ok: true, already: true };
   const ov = document.createElement('div');
   ov.id = ID;
   ov.setAttribute('role', 'presentation');
-  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(55,58,74,0.42);pointer-events:auto;cursor:not-allowed;display:flex;align-items:flex-start;justify-content:center;';
+  ov.style.cssText = 'position:fixed;inset:0;z-index:2147483646;background:rgba(55,58,74,0.42);pointer-events:auto;cursor:not-allowed;display:flex;align-items:flex-start;justify-content:center;';
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
   ['click', 'mousedown', 'mouseup', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'keypress', 'touchstart', 'touchmove', 'pointerdown'].forEach(t => ov.addEventListener(t, block, true));
-
-  // Guide visuel près du coin haut-droit (là où se trouve l'icône de l'extension
-  // dans la barre d'outils Chrome) : invite à recliquer sur l'icône pour ouvrir le
-  // panneau et configurer / lancer le téléchargement.
-  const guide = document.createElement('div');
-  guide.id = '__ttd_overlay_guide__';
-  guide.style.cssText = 'position:fixed;top:10px;right:18px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:360px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
-  const arrow = document.createElement('div');
-  arrow.textContent = '⬆ Icône de l’extension';
-  arrow.style.cssText = 'color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.6);margin-right:6px;';
-  const card = document.createElement('div');
-  card.style.cssText = 'background:#6264a7;color:#fff;padding:13px 16px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);text-align:left;';
-  card.innerHTML = '<div style="font-size:15px;font-weight:700;margin-bottom:5px;">👉 Cliquez à nouveau sur l’icône de l’extension</div>'
-    + '<div style="font-size:13px;font-weight:400;line-height:1.45;opacity:.96;">en haut à droite de Chrome, pour ouvrir le panneau latéral et <b>configurer</b> ou <b>lancer</b> le téléchargement des transcripts.</div>';
-  guide.appendChild(arrow);
-  guide.appendChild(card);
-
   const badge = document.createElement('div');
-  badge.textContent = '🔒 Onglet piloté par Teams Transcript Downloader — ne pas utiliser';
+  badge.textContent = '🔒 Automatisation en cours — onglet piloté par Teams Transcript Downloader';
   badge.style.cssText = 'margin-top:14px;max-width:90%;padding:8px 16px;border-radius:20px;background:rgba(98,100,167,0.96);color:#fff;font:600 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,0.25);text-align:center;';
-  ov.appendChild(guide);
   ov.appendChild(badge);
   document.documentElement.appendChild(ov);
   try {
@@ -231,7 +214,6 @@ function pageApplyOverlay() {
   return { ok: true };
 }
 
-// Injecté dans la page : retire le voile et son observateur.
 function pageRemoveOverlay() {
   const el = document.getElementById('__ttd_overlay__');
   if (el) {
@@ -241,18 +223,43 @@ function pageRemoveOverlay() {
   return { ok: true };
 }
 
-// Injecté dans la page : masque le guide « cliquez à nouveau » (le voile reste).
-// Appelé quand le panneau latéral est ouvert : le guide n'a plus lieu d'être.
-function pageHideOverlayGuide() {
-  const g = document.getElementById('__ttd_overlay_guide__');
-  if (g) g.style.display = 'none';
+// --- Guide NON bloquant : « cliquez à nouveau sur l'icône » ---
+// Affiché à la création de l'onglet (même automatisation OFF, pour ne pas gêner la
+// navigation manuelle). pointer-events:none → ne bloque rien. Masqué à l'ouverture
+// du panneau (message panelReady).
+function pageApplyGuide() {
+  const ID = '__ttd_guide__';
+  if (document.getElementById(ID)) return { ok: true, already: true };
+  const guide = document.createElement('div');
+  guide.id = ID;
+  guide.style.cssText = 'position:fixed;top:10px;right:18px;z-index:2147483647;pointer-events:none;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:360px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+  const arrow = document.createElement('div');
+  arrow.textContent = '⬆ Icône de l’extension';
+  arrow.style.cssText = 'color:#3b3b46;font-size:13px;font-weight:700;text-shadow:0 1px 3px rgba(255,255,255,.7);margin-right:6px;';
+  const card = document.createElement('div');
+  card.style.cssText = 'background:#6264a7;color:#fff;padding:13px 16px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);text-align:left;';
+  card.innerHTML = '<div style="font-size:15px;font-weight:700;margin-bottom:5px;">👉 Cliquez à nouveau sur l’icône de l’extension</div>'
+    + '<div style="font-size:13px;font-weight:400;line-height:1.45;opacity:.96;">en haut à droite de Chrome, pour ouvrir le panneau latéral et <b>configurer</b> ou <b>lancer</b> le téléchargement des transcripts.</div>';
+  guide.appendChild(arrow);
+  guide.appendChild(card);
+  document.documentElement.appendChild(guide);
+  try {
+    const mo = new MutationObserver(() => {
+      if (!document.getElementById(ID)) document.documentElement.appendChild(guide);
+    });
+    mo.observe(document.documentElement, { childList: true });
+    guide.__ttdObserver = mo;
+  } catch (e) { /* ignore */ }
   return { ok: true };
 }
 
-async function hideOverlayGuide(tabId) {
-  if (!tabId) return;
-  try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: pageHideOverlayGuide }); }
-  catch (e) { /* ignore */ }
+function pageRemoveGuide() {
+  const g = document.getElementById('__ttd_guide__');
+  if (g) {
+    try { if (g.__ttdObserver) g.__ttdObserver.disconnect(); } catch (e) { /* ignore */ }
+    g.remove();
+  }
+  return { ok: true };
 }
 
 async function showOverlay(tabId) {
@@ -267,9 +274,26 @@ async function hideOverlay(tabId) {
   catch (e) { /* ignore */ }
 }
 
-async function showOverlayOnDedicated() {
-  const { dedicatedTabId } = await chrome.storage.local.get('dedicatedTabId');
-  if (dedicatedTabId) await showOverlay(dedicatedTabId);
+async function showGuide(tabId) {
+  if (!tabId) return;
+  try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: pageApplyGuide }); }
+  catch (e) { /* ignore */ }
+}
+
+async function hideGuide(tabId) {
+  if (!tabId) return;
+  try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: pageRemoveGuide }); }
+  catch (e) { /* ignore */ }
+}
+
+// Voile bloquant = reflet de l'automatisation : ON → voile (empêche les clics par
+// erreur pendant le scan) ; OFF → pas de voile (navigation Teams manuelle possible).
+async function refreshOverlay(tabId) {
+  const id = tabId != null ? tabId : dedicatedTabId;
+  if (id == null) return;
+  const { autoEnabled } = await getSettings();
+  if (autoEnabled) await showOverlay(id);
+  else await hideOverlay(id);
 }
 
 // ============================================================
@@ -306,7 +330,7 @@ try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch
 syncAllTabs();
 chrome.storage.local.get('dedicatedTabId').then((s) => {
   dedicatedTabId = s.dedicatedTabId != null ? s.dedicatedTabId : null;
-  if (dedicatedTabId != null) showOverlay(dedicatedTabId).catch(() => {});
+  if (dedicatedTabId != null) refreshOverlay(dedicatedTabId).catch(() => {});
 }).catch(() => {});
 
 // ============================================================
@@ -822,7 +846,7 @@ async function ensureTeamsTab() {
       if (t && isTeamsUrl(t.url || t.pendingUrl)) {
         await setDedicated(t.id);
         try { await chrome.sidePanel.setOptions({ tabId: t.id, path: 'panel.html', enabled: true }); } catch (e) { /* ignore */ }
-        showOverlay(t.id).catch(() => {});
+        refreshOverlay(t.id).catch(() => {}); // voile seulement si automatisation ON
         return t.id;
       }
     } catch (e) { /* onglet fermé */ }
@@ -832,7 +856,11 @@ async function ensureTeamsTab() {
   // Active le panneau pour ce nouvel onglet (indispensable sans default_path pour
   // que sidePanel.open() ait un contenu à afficher).
   try { await chrome.sidePanel.setOptions({ tabId: created.id, path: 'panel.html', enabled: true }); } catch (e) { /* ignore */ }
-  // Le voile sera appliqué quand la page aura fini de charger (chrome.tabs.onUpdated).
+  // Automatisation ON → voile bloquant. OFF → seulement le guide « cliquez à
+  // nouveau » (non bloquant) pour laisser naviguer dans Teams manuellement.
+  const { autoEnabled } = await getSettings();
+  if (autoEnabled) showOverlay(created.id).catch(() => {});
+  else showGuide(created.id).catch(() => {});
   return created.id;
 }
 
@@ -1185,10 +1213,12 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' || changeInfo.url) syncSidePanel(tab).catch(() => {});
-  // Un rechargement de l'onglet piloté efface le voile injecté : on le réapplique
-  // quand la page a fini de charger (la navigation SPA ne recharge pas → le
-  // MutationObserver suffit dans ce cas).
-  if (changeInfo.status === 'complete' && tabId === dedicatedTabId) showOverlay(tabId).catch(() => {});
+  // Un rechargement de l'onglet piloté efface le voile/guide injectés : on les
+  // réapplique quand la page a fini de charger (la navigation SPA ne recharge pas →
+  // le MutationObserver suffit dans ce cas). Le voile suit l'état de l'automatisation.
+  if (changeInfo.status === 'complete' && tabId === dedicatedTabId) {
+    refreshOverlay(tabId).catch(() => {});
+  }
 });
 
 // Si l'onglet piloté est fermé, on oublie son id.
@@ -1206,7 +1236,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
       case 'panelReady':
         // Le panneau latéral est ouvert → on masque le guide « cliquez à nouveau »
         // sur le voile de l'onglet piloté (le voile lui-même reste).
-        if (dedicatedTabId != null) hideOverlayGuide(dedicatedTabId).catch(() => {});
+        if (dedicatedTabId != null) hideGuide(dedicatedTabId).catch(() => {});
         sendResponse({ ok: true });
         break;
       case 'start':
@@ -1220,6 +1250,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ autoEnabled: false });
         await resetToIdleState('Arrêté. Automatisation désactivée.');
         await updateActionUI();
+        await refreshOverlay(); // automatisation OFF → on retire le voile
         sendResponse({ ok: true });
         break;
       case 'extractManual':
@@ -1245,6 +1276,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await cancelAutoStart();
         }
         await updateActionUI();
+        await refreshOverlay(); // ON → voile bloquant ; OFF → retiré (navigation manuelle)
         sendResponse({ ok: true });
         break;
       case 'debug': {
