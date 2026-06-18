@@ -676,3 +676,15 @@
   best-effort (souvent vide hors récurrent). Journal v3 seulement (pas v2).
 - Outcome : success.
 - Next : commit branche + merge main + push.
+
+## 2026-06-18 (19) — agent (Claude)
+
+- Action : V3 — suppression de l'option « Réunions uniquement » (inutile : pas de
+  transcript dans les chats individuels/groupe). Switch retiré de panel.html +
+  références retirées de panel.js (const, loadSettings, listener). getSettings()
+  force meetingsOnly:true en dur.
+- Fichiers : v3/background.js, v3/panel.html, v3/panel.js, v3/manifest.json
+  (3.0.14→3.0.15), .prompt-hub/version.md (0.2.15→0.2.16), releases.md.
+- Validation : node --check panel + bg OK. v2 non touché.
+- Outcome : success.
+- Next : commit branche + merge main + push.

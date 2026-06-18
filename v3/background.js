@@ -56,11 +56,12 @@ async function sleepCancellable(ms, gen) {
 }
 
 async function getSettings() {
-  const s = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly', 'intervalMin']);
+  const s = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'intervalMin']);
   return {
     autoEnabled: s.autoEnabled ?? DEFAULTS.autoEnabled,
     maxChats: Number.isFinite(s.maxChats) ? s.maxChats : DEFAULTS.maxChats,
-    meetingsOnly: s.meetingsOnly ?? DEFAULTS.meetingsOnly,
+    // Toujours ON : les discussions individuelles/groupe n'ont pas de transcript.
+    meetingsOnly: true,
     intervalMin: Number.isFinite(s.intervalMin) && s.intervalMin >= 1 ? s.intervalMin : DEFAULTS.intervalMin
   };
 }
