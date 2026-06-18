@@ -1,5 +1,15 @@
 # Releases
 
+## 0.2.7 — 2026-06-18
+
+- **V3 / Le panneau ne disparaissait pas au changement d'onglet**. Cause : le
+  `side_panel.default_path` du manifest gardait le panneau activé GLOBALEMENT, donc
+  le `setOptions({ enabled:false })` par onglet ne le fermait pas. `default_path`
+  retiré du manifest : seuls les onglets Teams (activés explicitement par
+  `syncSidePanel`) ont le panneau → il disparaît dès qu'on passe sur un onglet non
+  activé. `openPanelOnActionClick` + chemin par onglet suffisent à l'ouvrir au clic.
+  Manifest 3.0.6 → 3.0.7.
+
 ## 0.2.6 — 2026-06-18
 
 - **V3 / Panneau latéral attaché à l'onglet Teams (modèle « comme Claude »)**.

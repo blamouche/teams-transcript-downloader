@@ -532,3 +532,20 @@
   des await. Limite : clic sur un onglet non-Teams n'ouvre rien (panneau désactivé).
 - Outcome : success (attente validation).
 - Next : commit `feat(v3): Claude-like per-tab side panel (no dedicated window)` + push.
+
+## 2026-06-18 (10) — agent (Claude)
+
+- Action : V3 — le panneau ne disparaissait pas au changement d'onglet. Cause :
+  side_panel.default_path gardait le panneau activé globalement → setOptions
+  enabled:false par onglet ne le fermait pas. Fix : retrait de default_path du
+  manifest. Sans défaut global, seuls les onglets Teams activés par syncSidePanel
+  ont le panneau → disparaît sur les autres onglets. openPanelOnActionClick + chemin
+  par onglet suffisent pour l'ouverture au clic.
+- Fichiers : v3/manifest.json (3.0.6→3.0.7, retrait side_panel),
+  .prompt-hub/version.md (0.2.6→0.2.7), releases.md.
+- Validation : manifest JSON OK. À tester en navigateur.
+- Leçon : pour "disparaît au changement d'onglet", NE PAS mettre de
+  side_panel.default_path (sinon panneau global persistant) ; tout piloter par
+  setOptions par onglet.
+- Outcome : success (attente validation).
+- Next : commit `fix(v3): remove default_path so panel hides on tab switch` + push.
