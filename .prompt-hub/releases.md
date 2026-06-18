@@ -1,5 +1,18 @@
 # Releases
 
+## 0.1.21 — 2026-06-18
+
+- **V2 / Réunions récurrentes : sélection de l'occurrence la plus récente**. Le
+  récap d'une réunion récurrente présente un sélecteur d'instance
+  (`data-testid="intelligent-recap-instance-select-dropdown"`, ex. « mercredi 17
+  juin 2026 13:30 – 14:00 »). Avant d'extraire, le scan ouvre désormais ce
+  sélecteur, parse les dates FR des options et positionne l'occurrence PASSÉE la
+  plus récente (repli : occurrence datée la plus récente, puis 1re option). No-op
+  pour une réunion simple sans sélecteur. Nouvelle fonction injectée
+  `frameSelectLatestInstance` + helper `selectLatestInstanceAcrossFrames`, appelés
+  dans `tryExtractCurrent` avant la tentative directe et re-tentés après ouverture
+  du récap. Le diagnostic `lastDiag` inclut l'instance choisie.
+
 ## 0.1.20 — 2026-06-16
 
 - **V2 / Cohérence des évènements : refonte de la sémantique d'arrêt et de la

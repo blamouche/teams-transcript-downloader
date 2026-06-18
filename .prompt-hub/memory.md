@@ -376,3 +376,21 @@
   valide. Pas de test navigateur exécuté (environnement CLI).
 - Outcome : success.
 - Next : commit `fix(v2): coherent stop/auto-loop semantics` puis push.
+
+## 2026-06-18 — agent (Claude)
+
+- Action : Réunions récurrentes — sélection de l'occurrence la plus récente avant
+  extraction. Le récap affiche un dropdown
+  `data-testid="intelligent-recap-instance-select-dropdown"`. Ajout de
+  `frameSelectLatestInstance` (ouvre le dropdown, parse les dates FR des options
+  `[role="option"]`, choisit l'occurrence passée la plus récente : t<=now sinon
+  date max sinon 1re option) + helper `selectLatestInstanceAcrossFrames` (balaie
+  les frames). Appelé dans `tryExtractCurrent` avant la tentative directe, re-tenté
+  après ouverture du récap. No-op si pas de sélecteur (réunion simple).
+- Fichiers modifiés : `v2/background.js`, `.prompt-hub/version.md` (0.1.20 →
+  0.1.21), `.prompt-hub/releases.md`.
+- Validation : `node --check v2/background.js` OK. Pas de test navigateur.
+- Limite connue : si la liste d'instances est virtualisée (longue série), seules
+  les options rendues sont lues ; la plus récente est généralement en haut donc OK.
+- Outcome : success.
+- Next : commit `feat(v2): pick latest instance for recurring meetings` puis push.

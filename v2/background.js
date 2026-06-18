@@ -447,6 +447,56 @@ function frameClickTid(tid) {
   return { ok: true, tid };
 }
 
+// Réunions récurrentes : le récap affiche un sélecteur d'instance (date/heure)
+// qu'il faut positionner sur l'occurrence PASSÉE la plus récente avant d'extraire,
+// sinon on récupère le transcript d'une autre occurrence (ou rien).
+// data-testid stable : "intelligent-recap-instance-select-dropdown".
+// Renvoie { found } et, si ouvert et sélectionné, { opened, selected, count }.
+function frameSelectLatestInstance() {
+  return (async () => {
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+    function vis(el) { const r = el.getBoundingClientRect(); return r.width > 0 && r.height > 0; }
+
+    // Parse une date FR du type "mercredi 17 juin 2026 13:30 – 14:00" → timestamp.
+    function parseFrDate(s) {
+      const months = {
+        janvier: 0, février: 1, fevrier: 1, mars: 2, avril: 3, mai: 4, juin: 5,
+        juillet: 6, août: 7, aout: 7, septembre: 8, octobre: 9, novembre: 10,
+        décembre: 11, decembre: 11
+      };
+      const m = (s || '').toLowerCase().match(/(\d{1,2})\s+([a-zàâäéèêëïîôöùûüç]+)\s+(\d{4})(?:\D+(\d{1,2})[:h](\d{2}))?/);
+      if (!m) return null;
+      const mon = months[m[2]];
+      if (mon === undefined) return null;
+      return new Date(+m[3], mon, +m[1], m[4] ? +m[4] : 0, m[5] ? +m[5] : 0).getTime();
+    }
+
+    const btn = document.querySelector('[data-testid="intelligent-recap-instance-select-dropdown"]');
+    if (!btn) return { found: false };
+
+    const current = (btn.textContent || '').trim().slice(0, 80);
+    btn.click(); // ouvre la liste déroulante
+    await sleep(900);
+
+    let opts = Array.from(document.querySelectorAll('[role="option"]')).filter(vis);
+    if (!opts.length) { try { btn.click(); } catch (e) { /* referme */ } return { found: true, opened: false, current }; }
+
+    const parsed = opts.map(o => ({ el: o, text: (o.textContent || '').trim().slice(0, 80), t: parseFrDate(o.textContent || '') }));
+    const now = Date.now();
+    let best = null;
+    // 1) occurrence passée la plus récente (t <= maintenant)
+    for (const p of parsed) if (p.t != null && p.t <= now && (best == null || p.t > best.t)) best = p;
+    // 2) repli : occurrence datée la plus récente toutes confondues
+    if (!best) for (const p of parsed) if (p.t != null && (best == null || p.t > best.t)) best = p;
+    // 3) repli : 1re option de la liste
+    if (!best) best = parsed[0];
+
+    best.el.click();
+    await sleep(600);
+    return { found: true, opened: true, selected: best.text, count: opts.length, current };
+  })();
+}
+
 function frameDumpSidebar() {
   function info(el) {
     const cls = el.className && el.className.toString ? el.className.toString() : '';
@@ -553,6 +603,21 @@ async function clickAcrossFrames(tabId, keywords) {
     } catch (e) { /* frame non scriptable */ }
   }
   return { ok: false };
+}
+
+// Cherche le sélecteur d'instance (réunion récurrente) dans toutes les frames et
+// positionne l'occurrence la plus récente. No-op (found:false) pour une réunion
+// simple sans sélecteur.
+async function selectLatestInstanceAcrossFrames(tabId) {
+  let frames = [];
+  try { frames = await chrome.webNavigation.getAllFrames({ tabId }); } catch (e) { return { found: false }; }
+  for (const frame of frames) {
+    try {
+      const res = await runInFrame(tabId, frame.frameId, frameSelectLatestInstance);
+      if (res && res.found) return { ...res, frameId: frame.frameId };
+    } catch (e) { /* frame non scriptable */ }
+  }
+  return { found: false };
 }
 
 async function findTranscriptFrame(tabId) {
@@ -718,9 +783,14 @@ async function extractBest(tabId, tabUrl, minScore) {
 // l'iframe), puis en repli on ouvre l'onglet Récap + sous-onglet Transcript via
 // leurs data-tid stables (pas de match texte destructeur).
 async function tryExtractCurrent(tabId, tabUrl, gen) {
+  // 0) réunion récurrente : positionner l'occurrence la plus récente AVANT
+  // d'extraire (no-op si pas de sélecteur d'instance).
+  let instance = await selectLatestInstanceAcrossFrames(tabId);
+  if (instance && instance.opened) { await sleepCancellable(4000, gen); if (scanGen !== gen) return null; }
+
   // 1) tentative directe (seuil élevé : un vrai transcript a un score important)
   let r = await extractBest(tabId, tabUrl, 30);
-  if (r.transcript) { lastDiag = { path: 'direct', bestScore: r.bestScore }; return r.transcript; }
+  if (r.transcript) { lastDiag = { path: 'direct', instance, bestScore: r.bestScore }; return r.transcript; }
   if (scanGen !== gen) return null;
 
   // 2) repli : onglet Récapitulatif puis sous-onglet Transcript (data-tid)
@@ -731,11 +801,19 @@ async function tryExtractCurrent(tabId, tabUrl, gen) {
   await sleepCancellable(5000, gen);
   if (scanGen !== gen) return null;
 
+  // Le sélecteur d'instance n'apparaît parfois qu'après ouverture du récap : re-tenter.
+  if (!(instance && instance.opened)) {
+    const again = await selectLatestInstanceAcrossFrames(tabId);
+    if (again && again.found) instance = again;
+    if (again && again.opened) { await sleepCancellable(4000, gen); if (scanGen !== gen) return null; }
+  }
+
   r = await extractBest(tabId, tabUrl, 8);
   lastDiag = {
     path: 'after-tabs',
     recapTab: !!(recap && recap.ok),
     transcriptTab: !!(tr && tr.ok),
+    instance: instance || null,
     bestScore: r.bestScore,
     bestFrameUrl: r.bestFrameUrl,
     reason: r.transcript ? null : (r.empty ? 'frame trouvée mais 0 entrée' : 'transcript introuvable (score insuffisant)')
