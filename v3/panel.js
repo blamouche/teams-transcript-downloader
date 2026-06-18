@@ -20,6 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const progressBar = document.getElementById('progress-bar');
   const summaryEl = document.getElementById('summary');
   const loaderEl = document.getElementById('loader');
+  const runLogEl = document.getElementById('run-log');
 
   const PHASE_TYPE = {
     idle: 'info', opening: 'loading', expanding: 'loading', scanning: 'loading',
@@ -117,10 +118,54 @@ document.addEventListener('DOMContentLoaded', () => {
     render(scanState);
   }
 
+  // ---- Journal des scans ----
+
+  const RUN_STATUS = {
+    downloaded: 'téléchargé',
+    skipped: 'déjà traité',
+    noTranscript: 'sans transcript'
+  };
+
+  function esc(s) {
+    return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
+      { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]
+    ));
+  }
+
+  function renderRunLog(runs) {
+    if (!runLogEl) return;
+    if (!Array.isArray(runs) || !runs.length) {
+      runLogEl.innerHTML = '<div class="run-empty">Aucun scan enregistré pour le moment.</div>';
+      return;
+    }
+    runLogEl.innerHTML = runs.map((run, idx) => {
+      const when = new Date(run.finishedAt || run.startedAt || Date.now()).toLocaleString();
+      const meetings = Array.isArray(run.meetings) ? run.meetings : [];
+      const counts = `${run.downloaded ?? 0}↓ · ${run.skipped ?? 0}✓ · ${run.noTranscript ?? 0}∅`;
+      const lis = meetings.map(m => {
+        const status = m.status || '';
+        const label = RUN_STATUS[status] || status;
+        const sub = m.when ? `<span class="rm-when">${esc(m.when)}</span>` : '';
+        return `<li class="run-meeting"><span class="rm-main"><span class="rm-name">${esc(m.name)}</span>${sub}</span>`
+          + `<span class="rm-status ${status}">${label}</span></li>`;
+      }).join('');
+      const body = meetings.length ? `<ul>${lis}</ul>` : '<ul><li class="run-meeting"><span class="rm-main">Aucune réunion scannée.</span></li></ul>';
+      return `<details class="run"${idx === 0 ? ' open' : ''}>`
+        + `<summary><span>${esc(when)}</span><span class="run-counts">${esc(counts)}</span></summary>`
+        + body + '</details>';
+    }).join('');
+  }
+
+  async function refreshRunLog() {
+    const { runLog } = await chrome.storage.local.get('runLog');
+    renderRunLog(runLog);
+  }
+
   // Mise à jour live quand le service worker écrit l'état.
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local') return;
     if (changes.scanState) render(changes.scanState.newValue);
+    if (changes.runLog) renderRunLog(changes.runLog.newValue);
     if (changes.autoEnabled && autoSwitch) {
       autoSwitch.checked = !!changes.autoEnabled.newValue;
     }
@@ -190,6 +235,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- Init ----
   loadSettings();
   refresh();
+  refreshRunLog();
   // Signale l'ouverture du panneau pour masquer le guide « cliquez à nouveau »
   // affiché sur le voile de l'onglet Teams.
   send('panelReady');

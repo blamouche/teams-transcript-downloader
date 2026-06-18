@@ -1,5 +1,22 @@
 # Releases
 
+## 0.2.15 — 2026-06-18
+
+- **V3 / Sécurité taille + journal des scans**.
+  - *Sécurité* : un transcript dont le fichier fait moins de **10 Ko** est jugé
+    incomplet (chargement raté) → la discussion est ré-ouverte et l'extraction
+    retentée (jusqu'à 3 tentatives). Après échec, la réunion est comptée « sans
+    transcript » (le fichier tronqué n'est pas téléchargé). `MIN_TRANSCRIPT_BYTES`
+    + `txtByteLength`.
+  - *Journal* : en bas du panneau, un **journal des scans** (du plus récent au plus
+    ancien) affiche pour chaque run la date/heure, puis la liste des réunions
+    scannées (nom, date/heure de la réunion quand disponible) avec leur statut
+    (téléchargé / déjà traité / sans transcript). Persisté dans `runLog` (30 derniers
+    runs) via `appendRun`, rendu dans `panel.{html,css,js}`. `frameChats` renvoie
+    désormais un champ `when` par discussion. Manifest 3.0.13 → 3.0.14.
+  - Caveat : une réunion réellement courte (<10 Ko) sera traitée comme « sans
+    transcript » (non téléchargée).
+
 ## 0.2.14 — 2026-06-18
 
 - **V2 & V3 / Déduplication par ID de thread (fin des re-téléchargements)**. Même
