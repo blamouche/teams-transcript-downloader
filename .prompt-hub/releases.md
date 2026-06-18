@@ -1,5 +1,12 @@
 # Releases
 
+## 0.2.19 — 2026-06-18
+
+- **V3 / Journal des scans : suppression de la limite de hauteur**. La zone du
+  journal avait `max-height: 320px` + scroll interne, masquant une partie du
+  contenu. Retiré : le journal s'affiche désormais en entier (le panneau latéral
+  défile naturellement). Manifest 3.0.17 → 3.0.18.
+
 ## 0.2.18 — 2026-06-18
 
 - **V3 / Récapitulatif masqué par un nom de réunion long**. Quand le titre est long,
