@@ -566,3 +566,18 @@
   ensuite ouverture synchrone fiable.
 - Outcome : success (attente validation).
 - Next : commit `feat(v3): click opens a dedicated Teams tab and attaches the panel` + push.
+
+## 2026-06-18 (12) — agent (Claude)
+
+- Action : V3 — choix utilisateur : garder 2 clics (limite geste Chrome) + ajouter
+  un guide visuel sur le voile. Le voile affiche une carte près du coin haut-droit
+  (« 👉 Cliquez à nouveau sur l'icône… pour ouvrir le panneau et configurer/lancer »)
+  + flèche « ⬆ Icône de l'extension ». Guide masqué à l'ouverture du panneau :
+  panel.js envoie 'panelReady' → SW exécute pageHideOverlayGuide sur l'onglet piloté
+  (le voile reste). guide id=__ttd_overlay_guide__.
+- Fichiers : v3/background.js (pageApplyOverlay + pageHideOverlayGuide +
+  hideOverlayGuide + case panelReady), v3/panel.js (send panelReady),
+  v3/manifest.json (3.0.8→3.0.9), .prompt-hub/version.md (0.2.8→0.2.9), releases.md.
+- Validation : node --check background + panel OK. À tester en navigateur.
+- Outcome : success (attente validation).
+- Next : commit `feat(v3): on-overlay guide to click the icon again` + push.

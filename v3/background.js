@@ -198,9 +198,27 @@ function pageApplyOverlay() {
   ov.style.cssText = 'position:fixed;inset:0;z-index:2147483647;background:rgba(55,58,74,0.42);pointer-events:auto;cursor:not-allowed;display:flex;align-items:flex-start;justify-content:center;';
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
   ['click', 'mousedown', 'mouseup', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'keypress', 'touchstart', 'touchmove', 'pointerdown'].forEach(t => ov.addEventListener(t, block, true));
+
+  // Guide visuel près du coin haut-droit (là où se trouve l'icône de l'extension
+  // dans la barre d'outils Chrome) : invite à recliquer sur l'icône pour ouvrir le
+  // panneau et configurer / lancer le téléchargement.
+  const guide = document.createElement('div');
+  guide.id = '__ttd_overlay_guide__';
+  guide.style.cssText = 'position:fixed;top:10px;right:18px;display:flex;flex-direction:column;align-items:flex-end;gap:6px;max-width:360px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;';
+  const arrow = document.createElement('div');
+  arrow.textContent = '⬆ Icône de l’extension';
+  arrow.style.cssText = 'color:#fff;font-size:13px;font-weight:600;text-shadow:0 1px 4px rgba(0,0,0,.6);margin-right:6px;';
+  const card = document.createElement('div');
+  card.style.cssText = 'background:#6264a7;color:#fff;padding:13px 16px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);text-align:left;';
+  card.innerHTML = '<div style="font-size:15px;font-weight:700;margin-bottom:5px;">👉 Cliquez à nouveau sur l’icône de l’extension</div>'
+    + '<div style="font-size:13px;font-weight:400;line-height:1.45;opacity:.96;">en haut à droite de Chrome, pour ouvrir le panneau latéral et <b>configurer</b> ou <b>lancer</b> le téléchargement des transcripts.</div>';
+  guide.appendChild(arrow);
+  guide.appendChild(card);
+
   const badge = document.createElement('div');
   badge.textContent = '🔒 Onglet piloté par Teams Transcript Downloader — ne pas utiliser';
   badge.style.cssText = 'margin-top:14px;max-width:90%;padding:8px 16px;border-radius:20px;background:rgba(98,100,167,0.96);color:#fff;font:600 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,0.25);text-align:center;';
+  ov.appendChild(guide);
   ov.appendChild(badge);
   document.documentElement.appendChild(ov);
   try {
@@ -221,6 +239,20 @@ function pageRemoveOverlay() {
     el.remove();
   }
   return { ok: true };
+}
+
+// Injecté dans la page : masque le guide « cliquez à nouveau » (le voile reste).
+// Appelé quand le panneau latéral est ouvert : le guide n'a plus lieu d'être.
+function pageHideOverlayGuide() {
+  const g = document.getElementById('__ttd_overlay_guide__');
+  if (g) g.style.display = 'none';
+  return { ok: true };
+}
+
+async function hideOverlayGuide(tabId) {
+  if (!tabId) return;
+  try { await chrome.scripting.executeScript({ target: { tabId, frameIds: [0] }, func: pageHideOverlayGuide }); }
+  catch (e) { /* ignore */ }
 }
 
 async function showOverlay(tabId) {
@@ -1171,6 +1203,12 @@ chrome.tabs.onRemoved.addListener((tabId) => {
 chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   (async () => {
     switch (msg && msg.type) {
+      case 'panelReady':
+        // Le panneau latéral est ouvert → on masque le guide « cliquez à nouveau »
+        // sur le voile de l'onglet piloté (le voile lui-même reste).
+        if (dedicatedTabId != null) hideOverlayGuide(dedicatedTabId).catch(() => {});
+        sendResponse({ ok: true });
+        break;
       case 'start':
         startScan('manual');
         sendResponse({ ok: true });

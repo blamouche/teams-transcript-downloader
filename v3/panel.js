@@ -190,4 +190,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- Init ----
   loadSettings();
   refresh();
+  // Signale l'ouverture du panneau pour masquer le guide « cliquez à nouveau »
+  // affiché sur le voile de l'onglet Teams.
+  send('panelReady');
 });

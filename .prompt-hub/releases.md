@@ -1,5 +1,17 @@
 # Releases
 
+## 0.2.9 — 2026-06-18
+
+- **V3 / Guide visuel sur le voile : « cliquez à nouveau sur l'icône »**.
+  Limitation Chrome assumée (geste utilisateur → 2 clics la 1re fois). Pour guider
+  l'utilisateur, le voile gris affiche désormais, près du coin haut-droit (où se
+  trouve l'icône de l'extension), une carte « 👉 Cliquez à nouveau sur l'icône de
+  l'extension … pour ouvrir le panneau et configurer / lancer le téléchargement »,
+  avec une flèche « ⬆ Icône de l'extension ». Le guide est masqué automatiquement
+  dès que le panneau s'ouvre : `panel.js` envoie `panelReady`, et le service worker
+  masque le guide (`pageHideOverlayGuide`) sur l'onglet piloté (le voile reste).
+  Manifest 3.0.8 → 3.0.9.
+
 ## 0.2.8 — 2026-06-18
 
 - **V3 / Le clic ouvre un onglet Teams dédié + attache la sidebar**. Retour à
