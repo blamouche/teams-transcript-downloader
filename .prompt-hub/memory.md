@@ -641,3 +641,19 @@
   transcrits au 1er scan post-MAJ, puis stable.
 - Outcome : success.
 - Next : commit sur branche fix + merge main + push.
+
+## 2026-06-18 (17) — agent (Claude)
+
+- Action : V2 & V3 — 2 scans consécutifs re-téléchargeaient 2/5 réunions (empreinte
+  de contenu encore variable). Nouvelle dédup : clé basée sur l'ID de thread Teams
+  (regex 19:…@thread.[a-z0-9]+ extrait de items[i].id, stable inter-session) +
+  date d'instance (réunions récurrentes), repli sur transcriptKey (contenu) si pas
+  d'ID. Helpers meetingThreadId + dedupKey ; boucle utilise dedupKey(items[i].id, t).
+  Appliqué v2 + v3.
+- Fichiers : v2/background.js, v3/background.js, v2/manifest.json (2.5.1→2.5.2),
+  v3/manifest.json (3.0.12→3.0.13), .prompt-hub/version.md (0.2.13→0.2.14), releases.md.
+- Validation : node --check v2 + v3 OK.
+- Note : lastDiag.instance fournit la date d'instance ; dedupKey lit lastDiag au
+  runtime (déclaré plus bas mais initialisé avant le scan).
+- Outcome : success.
+- Next : commit branche + merge main + push.

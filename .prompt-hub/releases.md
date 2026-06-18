@@ -1,5 +1,16 @@
 # Releases
 
+## 0.2.14 — 2026-06-18
+
+- **V2 & V3 / Déduplication par ID de thread (fin des re-téléchargements)**. Même
+  l'empreinte de contenu variait pour certaines réunions (chemins d'extraction
+  différents, parsing locuteur/message, instances). On déduplique désormais d'abord
+  sur l'**ID de thread Teams** (`19:meeting_…@thread.v2`) extrait de l'id de
+  l'élément de discussion — stable entre sessions et constant entre deux scans —,
+  combiné à la **date d'instance** pour les réunions récurrentes
+  (`meetingThreadId` + `dedupKey`). Repli sur l'empreinte de contenu si l'ID est
+  introuvable. `v2/manifest.json` 2.5.1 → 2.5.2, `v3/manifest.json` 3.0.12 → 3.0.13.
+
 ## 0.2.13 — 2026-06-18
 
 - **V2 & V3 / Déduplication plus robuste (transcripts re-téléchargés)**. L'ancienne
