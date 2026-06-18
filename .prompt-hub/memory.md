@@ -447,3 +447,19 @@
   utilisateur dans certains cas → fallback : panneau reste activé, ouverture manuelle.
 - Outcome : success.
 - Next : commit `feat(v3): dedicated Teams window with attached side panel` + push.
+
+## 2026-06-18 (5) — agent (Claude)
+
+- Action : Correctif V3 — le panneau latéral ne s'affichait pas. Cause :
+  chrome.sidePanel.open() exige un geste utilisateur, appelé après trop d'await
+  (ensureTeamsTab complet + storage + windows.update) → geste expiré. Handler
+  action.onClicked resserré : fenêtre dédiée existante → windows.get (1 await) puis
+  open() ; sinon windows.create puis open(). enablePanelForTab/focus/overlay en
+  fire-and-forget après open().
+- Fichiers : v3/background.js, v3/manifest.json (3.0.1→3.0.2),
+  .prompt-hub/version.md (0.2.1→0.2.2), releases.md.
+- Validation : node --check OK. Pas de test navigateur.
+- Limite : 1er clic (windows.create) peut expirer le geste → 2e clic affiche le
+  panneau (fenêtre alors déjà ouverte). À confirmer en réel par l'utilisateur.
+- Outcome : success (en attente de validation navigateur).
+- Next : commit `fix(v3): open side panel within user gesture` + push.

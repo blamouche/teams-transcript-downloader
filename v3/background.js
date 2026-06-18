@@ -1094,19 +1094,35 @@ chrome.runtime.onStartup.addListener(async () => {
 
 // Clic sur l'icône : ouvre (ou refocalise) la fenêtre Teams dédiée et y attache le
 // panneau latéral. Aucune action sur les autres onglets/fenêtres.
+//
+// IMPORTANT : chrome.sidePanel.open() exige un geste utilisateur actif. Chaque
+// `await` rapproche de son expiration, donc on appelle open() avec le MOINS
+// d'await possible avant lui (surtout pas après chrome.windows.create, trop long).
 chrome.action.onClicked.addListener(async () => {
-  const tabId = await ensureTeamsTab(); // crée/réutilise la fenêtre dédiée + active le panneau
-  const { dedicatedWindowId } = await chrome.storage.local.get('dedicatedWindowId');
+  const { dedicatedWindowId, dedicatedTabId } = await chrome.storage.local.get(['dedicatedWindowId', 'dedicatedTabId']);
+
+  // 1) Fenêtre dédiée déjà ouverte → on attache le panneau tout de suite
+  //    (un seul await avant open() : le geste est préservé).
   if (dedicatedWindowId != null) {
-    try { await chrome.windows.update(dedicatedWindowId, { focused: true }); } catch (e) { /* fenêtre fermée */ }
+    let exists = true;
+    try { await chrome.windows.get(dedicatedWindowId); } catch (e) { exists = false; }
+    if (exists) {
+      try { await chrome.sidePanel.open({ windowId: dedicatedWindowId }); } catch (e) { /* ignore */ }
+      enablePanelForTab(dedicatedTabId).catch(() => {});
+      chrome.windows.update(dedicatedWindowId, { focused: true }).catch(() => {});
+      showOverlay(dedicatedTabId).catch(() => {});
+      return;
+    }
   }
-  try {
-    if (dedicatedWindowId != null) await chrome.sidePanel.open({ windowId: dedicatedWindowId });
-    else if (tabId != null) await chrome.sidePanel.open({ tabId });
-  } catch (e) {
-    // Le geste utilisateur a pu expirer après la création de la fenêtre : le
-    // panneau reste activé pour cet onglet, l'utilisateur peut l'ouvrir manuellement.
-  }
+
+  // 2) Pas de fenêtre dédiée → on la crée, puis on tente d'attacher le panneau.
+  //    La création de fenêtre peut faire expirer le geste : si open() échoue, le
+  //    panneau reste activé pour l'onglet et un second clic l'affichera.
+  const created = await chrome.windows.create({ url: TEAMS_URL, focused: true });
+  const newTabId = created.tabs && created.tabs[0] ? created.tabs[0].id : undefined;
+  await chrome.storage.local.set({ dedicatedTabId: newTabId, dedicatedWindowId: created.id });
+  await enablePanelForTab(newTabId);
+  try { await chrome.sidePanel.open({ windowId: created.id }); } catch (e) { /* reclic affichera le panneau */ }
 });
 
 // Si l'onglet dédié est fermé, on oublie ses id.

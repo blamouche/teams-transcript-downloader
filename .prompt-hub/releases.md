@@ -1,5 +1,18 @@
 # Releases
 
+## 0.2.2 — 2026-06-18
+
+- **V3 / Correctif : le panneau latéral ne s'affichait pas**. `chrome.sidePanel.open()`
+  exige un geste utilisateur actif ; il était appelé après de nombreux `await`
+  (tout `ensureTeamsTab` : storage + `windows.create` + `setOptions`, puis encore
+  storage + `windows.update`), donc le geste était expiré → aucune ouverture. Le
+  handler `action.onClicked` est resserré : si la fenêtre dédiée existe déjà, on
+  appelle `open()` après un seul `await` léger (`windows.get`) ; sinon on crée la
+  fenêtre puis on tente `open()`. Manifest 3.0.1 → 3.0.2.
+- Limite connue : au tout premier clic (création de la fenêtre), l'`await` de
+  `windows.create` peut faire expirer le geste → le panneau reste activé pour
+  l'onglet et un second clic l'affiche. Les clics suivants l'attachent directement.
+
 ## 0.2.1 — 2026-06-18
 
 - **V3 : panneau latéral ciblé sur une fenêtre Teams dédiée**. Affinage du

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Teams Transcript Downloader (Auto) v3",
-  "version": "3.0.1",
+  "version": "3.0.2",
   "description": "Télécharge automatiquement les transcripts de meetings Microsoft Teams. Fenêtre Teams dédiée + panneau latéral attaché + voile gris de protection.",
   "permissions": [
     "activeTab",
