@@ -1,5 +1,22 @@
 # Releases
 
+## 0.2.6 — 2026-06-18
+
+- **V3 / Panneau latéral attaché à l'onglet Teams (modèle « comme Claude »)**.
+  Refonte : on n'ouvre plus de fenêtre dédiée. Le panneau suit le pattern
+  « side panel par site » :
+  - `setPanelBehavior({ openPanelOnActionClick: true })` → Chrome ouvre le panneau
+    au clic (gère le geste utilisateur → fiable, un seul clic), et seulement sur les
+    onglets où il est activé.
+  - `syncSidePanel` (+ listeners `tabs.onActivated` / `tabs.onUpdated` + `syncAllTabs`
+    au démarrage) active le panneau (`setOptions enabled+path`) sur les onglets Teams
+    et le désactive ailleurs → il **disparaît quand on change d'onglet**.
+  - Suppression de `chrome.action.onClicked`, de la création de fenêtre
+    (`chrome.windows.create`) et de tout le suivi `dedicatedWindowId`.
+  - `ensureTeamsTab` revient à un ONGLET (réutilise l'onglet piloté / un onglet
+    Teams existant, sinon crée un onglet). Le voile reste appliqué sur l'onglet
+    piloté. Manifest 3.0.5 → 3.0.6.
+
 ## 0.2.5 — 2026-06-18
 
 - **V3 / Tentatives d'ouverture du panneau sur la fenêtre dédiée (1er clic)**. Au

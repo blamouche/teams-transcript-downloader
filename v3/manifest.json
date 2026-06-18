@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "Teams Transcript Downloader (Auto) v3",
-  "version": "3.0.5",
-  "description": "Télécharge automatiquement les transcripts de meetings Microsoft Teams. Fenêtre Teams dédiée + panneau latéral attaché + voile gris de protection.",
+  "version": "3.0.6",
+  "description": "Télécharge automatiquement les transcripts de meetings Microsoft Teams. Panneau latéral attaché à l'onglet Teams (comme Claude) + voile gris de protection.",
   "permissions": [
     "activeTab",
     "scripting",
@@ -20,7 +20,7 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "Teams Transcript Downloader v3 — ouvrir la fenêtre Teams dédiée",
+    "default_title": "Teams Transcript Downloader v3 — ouvrir le panneau (onglet Teams)",
     "default_icon": {
       "16": "icons/icon16.png",
       "48": "icons/icon48.png",

@@ -514,3 +514,21 @@
   différé fonctionnera.
 - Outcome : success (attente validation).
 - Next : commit `feat(v3): attempt panel open on dedicated window (immediate + 0.5s)` + push.
+
+## 2026-06-18 (9) — agent (Claude)
+
+- Action : V3 — refonte du panneau en modèle "comme Claude" (side panel par site).
+  Plus de fenêtre dédiée. setPanelBehavior openPanelOnActionClick:true (Chrome gère
+  le geste → ouverture fiable au clic). syncSidePanel + tabs.onActivated/onUpdated +
+  syncAllTabs : panneau activé sur onglets Teams, désactivé ailleurs → disparaît au
+  changement d'onglet. Suppression de action.onClicked, windows.create,
+  dedicatedWindowId. ensureTeamsTab revient à un onglet (réutilise/crée). Voile
+  conservé sur l'onglet piloté.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.5→3.0.6), README.md,
+  .prompt-hub/version.md (0.2.5→0.2.6), releases.md.
+- Validation : node --check OK, manifest JSON OK. À tester en navigateur.
+- Leçon : pour un side panel fiable, utiliser openPanelOnActionClick:true (Chrome
+  gère le geste) + setOptions par onglet ; ne PAS appeler sidePanel.open() après
+  des await. Limite : clic sur un onglet non-Teams n'ouvre rien (panneau désactivé).
+- Outcome : success (attente validation).
+- Next : commit `feat(v3): Claude-like per-tab side panel (no dedicated window)` + push.
