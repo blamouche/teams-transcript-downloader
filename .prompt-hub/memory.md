@@ -704,3 +704,17 @@
 - Validation : node --check bg + panel OK.
 - Outcome : success.
 - Next : commit branche + merge main + push.
+
+## 2026-06-18 (21) — agent (Claude)
+
+- Action : V3 — Récapitulatif non détecté quand le nom de réunion est long (onglets
+  repliés dans le menu "+N"). Cause confirmée par capture + debug JSON (meeting "DXD
+  ISPARK Spotlight..." → noTranscript). Ajout frameOpenRecap : clic direct si onglet
+  recap visible, sinon ouverture du menu de débordement (texte +\d+ / aria plus
+  d'onglets / data-tid overflow) puis clic Récapitulatif (data-tid ou mots-clés).
+  Remplace frameClickTid(recap) dans tryExtractCurrent. lastDiag.recapVia ajouté.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.16→3.0.17),
+  .prompt-hub/version.md (0.2.17→0.2.18), releases.md.
+- Validation : node --check OK.
+- Outcome : success.
+- Next : commit branche + merge main + push.
