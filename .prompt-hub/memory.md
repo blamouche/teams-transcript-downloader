@@ -408,3 +408,24 @@
 - Validation : `node --check v2/background.js` OK. Pas de test navigateur.
 - Outcome : success.
 - Next : commit `fix(v2): robust scroll for virtualized transcript list` puis push.
+
+## 2026-06-18 (3) — agent (Claude)
+
+- Action : Création de la V3 (branche feature/v3-side-panel, dossier v3/ copié de
+  v2/). Deux ajouts par rapport à V2 : (1) UI en panneau latéral chrome.sidePanel
+  (clic icône → panneau à droite, comme Claude) au lieu du popup ; popup.* →
+  panel.* (largeur fluide), manifest avec side_panel.default_path + perm sidePanel
+  + action sans default_popup ; setPanelBehavior({openPanelOnActionClick:true}).
+  (2) Voile gris semi-transparent EN PERMANENCE sur l'onglet Teams dédié : injecté
+  frame 0 via chrome.scripting (pageApplyOverlay, idempotent + MutationObserver),
+  bloque clic/clavier/scroll utilisateur, réinjecté via tabs.onUpdated et au réveil
+  du SW. Les actions automatisées (.click/scrollTop) ne sont pas bloquées.
+  Décisions utilisateur : voile permanent sur onglet dédié ; panneau latéral seul.
+- Fichiers : v3/* (nouveau module), README.md, .prompt-hub/version.md (0.1.22 →
+  0.2.0, nouvelle branche), .prompt-hub/releases.md, todo dédié.
+- Validation : node --check background/panel/content OK ; manifest JSON OK. Pas de
+  test navigateur (CLI).
+- Limite : hideOverlay défini mais jamais appelé (voile voulu permanent) ;
+  sidePanel requiert Chrome >= 114.
+- Outcome : success.
+- Next : commit `feat(v3): side panel UI + permanent overlay on dedicated tab` + push.

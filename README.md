@@ -2,16 +2,17 @@
 
 Extension Chrome (Manifest V3) pour télécharger les transcripts de réunions Microsoft Teams (y compris via l'interface **Recap**) au format JSON ou TXT.
 
-## Deux versions
+## Trois versions
 
-Le dépôt fournit **deux versions** complètes de l'extension, dans deux dossiers distincts. On charge l'une ou l'autre dans Chrome selon l'usage souhaité.
+Le dépôt fournit **trois versions** complètes de l'extension, dans trois dossiers distincts. On charge l'une ou l'autre dans Chrome selon l'usage souhaité.
 
 | Version | Dossier | Fonctionnement |
 |---|---|---|
 | **V1** | [`v1/`](v1/) | Extraction **manuelle** : on ouvre soi-même le panneau Transcript dans Teams, puis on clique sur *Extraire*. |
-| **V2** | [`v2/`](v2/) | Tout V1 **+ automatisation en arrière-plan** (service worker) : scan des N premières discussions (paramétrable), **même popup fermée** et **sans que l'onglet Teams soit actif**, avec ouverture auto d'un onglet Teams dédié, démarrage automatique 1 min après activation, et arrêt manuel. Le bouton manuel de la V1 reste disponible en secours. |
+| **V2** | [`v2/`](v2/) | Tout V1 **+ automatisation en arrière-plan** (service worker) : scan des N premières discussions (paramétrable), **même popup fermée** et **sans que l'onglet Teams soit actif**, avec ouverture auto d'un onglet Teams dédié, démarrage automatique après activation, et arrêt manuel. |
+| **V3** | [`v3/`](v3/) | Identique à V2 sur le fond, mais l'**UI vit dans un panneau latéral** (`chrome.sidePanel`, ouvert au clic sur l'icône — comme l'extension Claude) au lieu d'un popup, et l'**onglet Teams dédié est recouvert d'un voile gris semi-transparent** en permanence : on voit l'automatisation travailler mais l'utilisateur ne peut pas cliquer par erreur dans cet onglet. |
 
-La V1 reste strictement inchangée. La V2 est un sur-ensemble.
+La V1 reste strictement inchangée. V2 est un sur-ensemble de V1, V3 un sur-ensemble de V2.
 
 ## Description
 
@@ -66,8 +67,9 @@ Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur
 2. Ouvrez Chrome à l'adresse `chrome://extensions/`.
 3. Activez le **Mode développeur** (toggle en haut à droite).
 4. Cliquez sur **« Charger l'extension non empaquetée »**.
-5. Sélectionnez le dossier **`v1/`** (version manuelle) ou **`v2/`** (version
-   automatique) selon la version voulue.
+5. Sélectionnez le dossier **`v1/`** (manuelle), **`v2/`** (automatique, popup)
+   ou **`v3/`** (automatique, panneau latéral + voile sur l'onglet dédié) selon la
+   version voulue.
 
 ### Chrome Web Store
 
@@ -225,12 +227,20 @@ Le bouton **Debug DOM** du popup déclenche `debugDOM()` : pour chaque frame, il
 │   ├── popup.js       # Orchestration + fonctions injectées (scan, extract, title, debug)
 │   └── icons/         # Icônes de l'extension (16/48/128 + SVG)
 ├── v2/                # Version 2 — automatisation en arrière-plan (sur-ensemble de V1)
-│   ├── manifest.json  # Manifest V3 (version 2.0.0, service worker, perms tabs/alarms)
+│   ├── manifest.json  # Manifest V3 (service worker, perms tabs/alarms, popup)
 │   ├── background.js  # Service worker : orchestration, scan, tab dédié, alarms, download
 │   ├── content.js
 │   ├── popup.html     # UI télécommande : switch, nb discussions, start/stop, manuel
 │   ├── popup.css
 │   ├── popup.js       # Télécommande : messages au SW + rendu de l'état (storage)
+│   └── icons/
+├── v3/                # Version 3 — panneau latéral + voile sur l'onglet dédié (sur-ensemble de V2)
+│   ├── manifest.json  # Manifest V3 (perm sidePanel, side_panel.default_path, action sans popup)
+│   ├── background.js  # SW V2 + comportement side panel + injection/cycle de vie du voile
+│   ├── content.js
+│   ├── panel.html     # UI du panneau latéral (ex-popup, largeur fluide)
+│   ├── panel.css
+│   ├── panel.js       # Télécommande (identique au principe V2)
 │   └── icons/
 ├── README.md
 ├── .github/workflows/ # Workflows GitHub Actions (release automatique des 2 versions)

@@ -1,5 +1,24 @@
 # Releases
 
+## 0.2.0 — 2026-06-18
+
+- **V3 : nouvelle version (panneau latéral + voile sur l'onglet dédié)**. Branche
+  `feature/v3-side-panel`, dossier `v3/` copié de `v2/`. Même moteur que V2, avec :
+  - **UI en panneau latéral** (`chrome.sidePanel`) au lieu d'un popup : le clic sur
+    l'icône ouvre le panneau à droite (comme l'extension Claude) via
+    `setPanelBehavior({ openPanelOnActionClick: true })`. `popup.{html,css,js}` →
+    `panel.{html,css,js}` (largeur fluide), `manifest` avec `side_panel.default_path`
+    et `action` sans `default_popup`, permission `sidePanel`.
+  - **Voile gris semi-transparent EN PERMANENCE sur l'onglet Teams dédié** : injecté
+    en frame 0 via `chrome.scripting` (idempotent), il bloque clic/clavier/scroll de
+    l'utilisateur (`pointer-events` + listeners en capture) et affiche un bandeau
+    « Onglet piloté… ». Un `MutationObserver` le réinsère si la SPA le retire ;
+    `chrome.tabs.onUpdated` le réapplique après un rechargement. Appliqué dès que
+    l'onglet dédié existe (même automatisation OFF). Les actions automatisées
+    (`element.click()`, `scrollTop`) étant programmatiques, elles ne sont pas
+    bloquées par le voile.
+  - V1 et V2 inchangées. README mis à jour (3 versions).
+
 ## 0.1.22 — 2026-06-18
 
 - **V2 / Extraction : défilement robuste de la liste virtualisée**. La boucle de

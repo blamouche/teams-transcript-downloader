@@ -1,0 +1,48 @@
+{
+  "manifest_version": 3,
+  "name": "Teams Transcript Downloader (Auto) v3",
+  "version": "3.0.0",
+  "description": "Télécharge automatiquement les transcripts de meetings Microsoft Teams. UI en panneau latéral + onglet Teams dédié verrouillé par un voile gris.",
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "downloads",
+    "webNavigation",
+    "storage",
+    "tabs",
+    "alarms",
+    "sidePanel"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "Teams Transcript Downloader v3",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "side_panel": {
+    "default_path": "panel.html"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://teams.microsoft.com/*",
+        "https://teams.cloud.microsoft/*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}
