@@ -429,3 +429,21 @@
   sidePanel requiert Chrome >= 114.
 - Outcome : success.
 - Next : commit `feat(v3): side panel UI + permanent overlay on dedicated tab` + push.
+
+## 2026-06-18 (4) — agent (Claude)
+
+- Action : V3 — panneau ciblé sur une fenêtre Teams dédiée. Le clic sur l'icône
+  (chrome.action.onClicked) ouvre une fenêtre dédiée (chrome.windows.create) ou la
+  refocalise, puis attache le panneau via sidePanel.open({windowId}). Panneau activé
+  par onglet uniquement (sidePanel.setOptions enabled:true) ; side_panel.default_path
+  retiré du manifest → aucun autre onglet n'a de panneau. openPanelOnActionClick=false.
+  ensureTeamsTab ne réutilise plus les onglets Teams de l'utilisateur (crée toujours
+  une fenêtre dédiée). Nettoyage dedicatedTabId/dedicatedWindowId via tabs.onRemoved
+  + windows.onRemoved.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.0→3.0.1, retrait side_panel),
+  README.md, .prompt-hub/version.md (0.2.0→0.2.1), releases.md.
+- Validation : node --check background OK, manifest JSON OK. Pas de test navigateur.
+- Limite : sidePanel.open() après await windows.create peut perdre le geste
+  utilisateur dans certains cas → fallback : panneau reste activé, ouverture manuelle.
+- Outcome : success.
+- Next : commit `feat(v3): dedicated Teams window with attached side panel` + push.

@@ -10,7 +10,7 @@ Le dépôt fournit **trois versions** complètes de l'extension, dans trois doss
 |---|---|---|
 | **V1** | [`v1/`](v1/) | Extraction **manuelle** : on ouvre soi-même le panneau Transcript dans Teams, puis on clique sur *Extraire*. |
 | **V2** | [`v2/`](v2/) | Tout V1 **+ automatisation en arrière-plan** (service worker) : scan des N premières discussions (paramétrable), **même popup fermée** et **sans que l'onglet Teams soit actif**, avec ouverture auto d'un onglet Teams dédié, démarrage automatique après activation, et arrêt manuel. |
-| **V3** | [`v3/`](v3/) | Identique à V2 sur le fond, mais l'**UI vit dans un panneau latéral** (`chrome.sidePanel`, ouvert au clic sur l'icône — comme l'extension Claude) au lieu d'un popup, et l'**onglet Teams dédié est recouvert d'un voile gris semi-transparent** en permanence : on voit l'automatisation travailler mais l'utilisateur ne peut pas cliquer par erreur dans cet onglet. |
+| **V3** | [`v3/`](v3/) | Identique à V2 sur le fond, mais le clic sur l'icône **ouvre une fenêtre Teams dédiée** et y **attache un panneau latéral** (`chrome.sidePanel`) — le panneau n'apparaît que sur cet onglet, les autres onglets/fenêtres ne sont pas impactés. La fenêtre dédiée est recouverte d'un **voile gris semi-transparent** permanent : on voit l'automatisation travailler mais l'utilisateur ne peut pas cliquer par erreur dedans. |
 
 La V1 reste strictement inchangée. V2 est un sur-ensemble de V1, V3 un sur-ensemble de V2.
 

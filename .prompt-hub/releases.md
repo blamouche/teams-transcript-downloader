@@ -1,5 +1,21 @@
 # Releases
 
+## 0.2.1 — 2026-06-18
+
+- **V3 : panneau latéral ciblé sur une fenêtre Teams dédiée**. Affinage du
+  comportement du panneau :
+  - Le clic sur l'icône (`chrome.action.onClicked`) **ouvre une fenêtre Teams
+    dédiée** (`chrome.windows.create`) — ou la refocalise si elle existe déjà — puis
+    y **attache le panneau** via `chrome.sidePanel.open({ windowId })`.
+  - Le panneau n'est activé que pour l'onglet dédié (`sidePanel.setOptions({ tabId,
+    enabled:true })`) ; `side_panel.default_path` retiré du manifest → **aucun autre
+    onglet/fenêtre n'a de panneau**. `openPanelOnActionClick` repassé à `false`.
+  - On ne réutilise plus les onglets Teams existants de l'utilisateur :
+    `ensureTeamsTab` crée toujours une fenêtre dédiée, donc les onglets de
+    l'utilisateur ne sont jamais recouverts par le voile.
+  - Nettoyage des id (`dedicatedTabId`/`dedicatedWindowId`) à la fermeture de
+    l'onglet ou de la fenêtre dédiée. Manifest 3.0.0 → 3.0.1.
+
 ## 0.2.0 — 2026-06-18
 
 - **V3 : nouvelle version (panneau latéral + voile sur l'onglet dédié)**. Branche
