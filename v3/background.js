@@ -267,9 +267,9 @@ async function syncAllTabs() {
 // Initialisation à chaque réveil du service worker.
 setAppIcon();
 updateActionUI().catch(() => {});
-// Le clic sur l'icône ouvre le panneau (Chrome gère le geste) ; il ne s'ouvre que
-// sur les onglets où il est activé (onglets Teams, via syncSidePanel).
-try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: true }).catch(() => {}); } catch (e) { /* API indisponible */ }
+// On gère le clic nous-mêmes (chrome.action.onClicked) pour ouvrir/cibler un onglet
+// Teams → l'ouverture automatique globale doit rester désactivée.
+try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {}); } catch (e) { /* API indisponible */ }
 // État par onglet + réhydrate l'onglet piloté + réapplique le voile éventuel.
 syncAllTabs();
 chrome.storage.local.get('dedicatedTabId').then((s) => {
@@ -779,9 +779,9 @@ function isTeamsUrl(url) {
   return !!url && (url.includes('teams.microsoft.com') || url.includes('teams.cloud.microsoft'));
 }
 
-// Renvoie le tabId d'un onglet Teams utilisable (pour l'automatisation), en
-// réutilisant l'onglet piloté précédent, sinon un onglet Teams existant, sinon en
-// créant un nouvel ONGLET (pas de fenêtre dédiée). Le voile y est appliqué.
+// Renvoie le tabId de l'onglet Teams piloté, en le réutilisant s'il est encore
+// ouvert, sinon en créant un NOUVEL onglet Teams (on ne détourne pas un onglet
+// Teams quelconque de l'utilisateur). Le panneau y est activé et le voile appliqué.
 async function ensureTeamsTab() {
   const stored = await chrome.storage.local.get('dedicatedTabId');
   if (stored.dedicatedTabId != null) {
@@ -789,19 +789,17 @@ async function ensureTeamsTab() {
       const t = await chrome.tabs.get(stored.dedicatedTabId);
       if (t && isTeamsUrl(t.url || t.pendingUrl)) {
         await setDedicated(t.id);
+        try { await chrome.sidePanel.setOptions({ tabId: t.id, path: 'panel.html', enabled: true }); } catch (e) { /* ignore */ }
         showOverlay(t.id).catch(() => {});
         return t.id;
       }
     } catch (e) { /* onglet fermé */ }
   }
-  const existing = await chrome.tabs.query({ url: ['https://teams.microsoft.com/*', 'https://teams.cloud.microsoft/*'] });
-  if (existing.length) {
-    await setDedicated(existing[0].id);
-    showOverlay(existing[0].id).catch(() => {});
-    return existing[0].id;
-  }
   const created = await chrome.tabs.create({ url: TEAMS_URL, active: false });
   await setDedicated(created.id);
+  // Active le panneau pour ce nouvel onglet (indispensable sans default_path pour
+  // que sidePanel.open() ait un contenu à afficher).
+  try { await chrome.sidePanel.setOptions({ tabId: created.id, path: 'panel.html', enabled: true }); } catch (e) { /* ignore */ }
   // Le voile sera appliqué quand la page aura fini de charger (chrome.tabs.onUpdated).
   return created.id;
 }
@@ -1125,9 +1123,26 @@ chrome.runtime.onStartup.addListener(async () => {
   if (autoEnabled && !isRunning) startScan('auto');
 });
 
-// Le clic sur l'icône est géré par Chrome (openPanelOnActionClick) : le panneau
-// s'ouvre sur l'onglet courant s'il y est activé (onglets Teams uniquement, via
-// syncSidePanel). Pas de chrome.action.onClicked → pas de souci de geste utilisateur.
+// Clic sur l'icône : ouvre/cible un onglet Teams et y attache la sidebar.
+//   - Si l'onglet Teams piloté est déjà connu, ouverture SYNCHRONE du panneau
+//     dessus (geste utilisateur préservé → fiable).
+//   - Sinon, ouverture d'un nouvel onglet Teams puis tentative d'attache du
+//     panneau (au tout premier clic, le geste peut expirer après la création de
+//     l'onglet → un second clic l'affichera, l'onglet étant alors connu).
+chrome.action.onClicked.addListener((tab) => {
+  // Cible déjà activée (panneau prêt) → ouverture synchrone, sans aucun await.
+  const syncTarget = (dedicatedTabId != null) ? dedicatedTabId
+    : (tab && isTeamsUrl(tab.url) ? tab.id : null);
+  if (syncTarget != null) {
+    try { const p = chrome.sidePanel.open({ tabId: syncTarget }); if (p && p.catch) p.catch(() => {}); }
+    catch (e) { /* API indisponible */ }
+  }
+  (async () => {
+    const tid = await ensureTeamsTab();                 // réutilise/crée l'onglet Teams (+ voile + panneau activé)
+    try { await chrome.tabs.update(tid, { active: true }); } catch (e) { /* ignore */ }
+    try { await chrome.sidePanel.open({ tabId: tid }); } catch (e) { /* geste expiré → reclic affichera */ }
+  })().catch(() => {});
+});
 
 // Active/désactive le panneau par onglet quand on change d'onglet ou que l'URL
 // change → le panneau n'apparaît que sur les onglets Teams et disparaît dès qu'on

@@ -549,3 +549,20 @@
   setOptions par onglet.
 - Outcome : success (attente validation).
 - Next : commit `fix(v3): remove default_path so panel hides on tab switch` + push.
+
+## 2026-06-18 (11) — agent (Claude)
+
+- Action : V3 — le clic doit ouvrir un nouvel onglet Teams + attacher la sidebar.
+  Retour à action.onClicked (openPanelOnActionClick:false). Clic : open() synchrone
+  sur l'onglet piloté si dedicatedTabId connu (geste préservé) ; sinon ensureTeamsTab
+  crée un NOUVEL onglet Teams (ne détourne plus un onglet Teams existant), l'active,
+  tente open(). ensureTeamsTab active le panneau de l'onglet (setOptions enabled+path,
+  requis sans default_path). syncSidePanel conservé pour disparition au changement
+  d'onglet.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.7→3.0.8), README.md,
+  .prompt-hub/version.md (0.2.7→0.2.8), releases.md.
+- Validation : node --check OK. À tester.
+- Limite : 1er clic peut nécessiter un 2e clic (geste expiré après tabs.create) ;
+  ensuite ouverture synchrone fiable.
+- Outcome : success (attente validation).
+- Next : commit `feat(v3): click opens a dedicated Teams tab and attaches the panel` + push.

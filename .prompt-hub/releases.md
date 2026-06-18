@@ -1,5 +1,19 @@
 # Releases
 
+## 0.2.8 — 2026-06-18
+
+- **V3 / Le clic ouvre un onglet Teams dédié + attache la sidebar**. Retour à
+  `chrome.action.onClicked` (`openPanelOnActionClick: false`). Au clic : ouverture
+  synchrone du panneau sur l'onglet Teams piloté si son id est déjà connu (geste
+  préservé) ; sinon `ensureTeamsTab` ouvre un NOUVEL onglet Teams (ne détourne plus
+  un onglet Teams existant de l'utilisateur), l'active et tente d'attacher le
+  panneau. `ensureTeamsTab` active désormais le panneau de l'onglet
+  (`setOptions enabled+path`, nécessaire sans `default_path`). La disparition au
+  changement d'onglet (syncSidePanel) est conservée. Manifest 3.0.7 → 3.0.8.
+- Limite : au tout premier clic, le geste peut expirer après la création de
+  l'onglet → un second clic affiche la sidebar (l'onglet est alors connu, ouverture
+  synchrone fiable).
+
 ## 0.2.7 — 2026-06-18
 
 - **V3 / Le panneau ne disparaissait pas au changement d'onglet**. Cause : le
