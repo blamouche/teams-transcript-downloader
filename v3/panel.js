@@ -58,6 +58,7 @@ document.addEventListener('DOMContentLoaded', () => {
         <li><b>${summary.downloaded ?? 0}</b> téléchargé(s)</li>
         <li><b>${summary.skipped ?? 0}</b> déjà traité(s)</li>
         <li><b>${summary.noTranscript ?? 0}</b> sans transcript</li>
+        <li><b>${summary.errored ?? 0}</b> en erreur</li>
         <li><b>${summary.total ?? 0}</b> scannée(s)</li>
       </ul>
       ${t ? `<div class="summary-time">Terminé à ${t}</div>` : ''}
@@ -122,8 +123,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const RUN_STATUS = {
     downloaded: 'téléchargé',
     skipped: 'déjà traité',
-    noTranscript: 'sans transcript'
+    noTranscript: 'sans transcript',
+    error: 'erreur'
   };
+
+  let currentRuns = []; // dernier journal rendu (pour le téléchargement des logs)
 
   function esc(s) {
     return String(s == null ? '' : s).replace(/[&<>"']/g, c => (
@@ -133,14 +137,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
   function renderRunLog(runs) {
     if (!runLogEl) return;
-    if (!Array.isArray(runs) || !runs.length) {
+    currentRuns = Array.isArray(runs) ? runs : [];
+    if (!currentRuns.length) {
       runLogEl.innerHTML = '<div class="run-empty">Aucun scan enregistré pour le moment.</div>';
       return;
     }
-    runLogEl.innerHTML = runs.map((run, idx) => {
+    runLogEl.innerHTML = currentRuns.map((run, idx) => {
       const when = new Date(run.finishedAt || run.startedAt || Date.now()).toLocaleString();
       const meetings = Array.isArray(run.meetings) ? run.meetings : [];
-      const counts = `${run.downloaded ?? 0}↓ · ${run.skipped ?? 0}✓ · ${run.noTranscript ?? 0}∅`;
+      const counts = `${run.downloaded ?? 0}↓ · ${run.skipped ?? 0}✓ · ${run.noTranscript ?? 0}∅ · ${run.errored ?? 0}⚠`;
       const lis = meetings.map(m => {
         const status = m.status || '';
         const label = RUN_STATUS[status] || status;
@@ -149,10 +154,46 @@ document.addEventListener('DOMContentLoaded', () => {
           + `<span class="rm-status ${status}">${label}</span></li>`;
       }).join('');
       const body = meetings.length ? `<ul>${lis}</ul>` : '<ul><li class="run-meeting"><span class="rm-main">Aucune réunion scannée.</span></li></ul>';
+      // Lien de téléchargement des logs si au moins une erreur / un sans-transcript.
+      const hasProblems = (run.errored ?? 0) > 0 || (run.noTranscript ?? 0) > 0;
+      const dl = hasProblems
+        ? `<a href="#" class="run-dl" data-run-index="${idx}" title="Télécharger les logs de debug de ce scan">⬇ Logs de debug</a>`
+        : '';
       return `<details class="run"${idx === 0 ? ' open' : ''}>`
         + `<summary><span>${esc(when)}</span><span class="run-counts">${esc(counts)}</span></summary>`
-        + body + '</details>';
+        + body + dl + '</details>';
     }).join('');
+  }
+
+  // Construit le contenu des logs de debug d'un run (JSON lisible).
+  function buildRunLogFile(run) {
+    return JSON.stringify({
+      app: 'teams-transcript-downloader v3',
+      startedAt: run.startedAt ? new Date(run.startedAt).toISOString() : null,
+      finishedAt: run.finishedAt ? new Date(run.finishedAt).toISOString() : null,
+      counts: {
+        downloaded: run.downloaded ?? 0, skipped: run.skipped ?? 0,
+        noTranscript: run.noTranscript ?? 0, errored: run.errored ?? 0, total: run.total ?? 0
+      },
+      meetings: run.meetings || []
+    }, null, 2);
+  }
+
+  if (runLogEl) {
+    runLogEl.addEventListener('click', (e) => {
+      const a = e.target.closest('.run-dl');
+      if (!a) return;
+      e.preventDefault();
+      const run = currentRuns[+a.dataset.runIndex];
+      if (!run) return;
+      const blob = new Blob([buildRunLogFile(run)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const ts = new Date(run.finishedAt || run.startedAt || Date.now()).toISOString().replace(/[:.]/g, '-');
+      const tmp = document.createElement('a');
+      tmp.href = url; tmp.download = `ttd-debug-run-${ts}.json`;
+      document.body.appendChild(tmp); tmp.click(); tmp.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    });
   }
 
   async function refreshRunLog() {
