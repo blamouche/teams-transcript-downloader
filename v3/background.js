@@ -573,7 +573,14 @@ function frameChats(action, arg, meetingsOnly) {
 
   if (action === 'list') {
     const items = collectChatItems(!!meetingsOnly);
-    return { ok: items.length > 0, items: items.map(it => ({ id: it.id, label: (it.textContent || '').trim().slice(0, 80) })) };
+    function whenOf(it) {
+      const t = it.querySelector('time');
+      let w = t ? (t.getAttribute('datetime') || t.textContent || '') : '';
+      if (!w.trim()) { const ts = it.querySelector('[id^="time-"], [class*="timestamp" i]'); if (ts) w = ts.textContent || ''; }
+      if (!w.trim()) { const al = it.getAttribute('aria-label'); if (al) w = al; }
+      return w.trim().slice(0, 60);
+    }
+    return { ok: items.length > 0, items: items.map(it => ({ id: it.id, label: (it.textContent || '').trim().slice(0, 80), when: whenOf(it) })) };
   }
   const it = arg ? document.getElementById(arg) : null;
   if (!it) return { ok: false, reason: 'id not found', id: arg };
@@ -915,6 +922,14 @@ function buildTxt(transcript) {
   return lines.join('\n');
 }
 
+// Sécurité : un transcript dont le fichier fait moins de ce seuil est considéré
+// comme une extraction incomplète (chargement raté) → on retente.
+const MIN_TRANSCRIPT_BYTES = 10 * 1024; // 10 Ko
+
+function txtByteLength(text) {
+  try { return new TextEncoder().encode(text).length; } catch (e) { return (text || '').length; }
+}
+
 async function downloadTxt(transcript) {
   const text = buildTxt(transcript);
   const url = 'data:text/plain;charset=utf-8,' + encodeURIComponent(text);
@@ -971,6 +986,21 @@ async function getProcessed() {
 
 async function saveProcessed(map) {
   await chrome.storage.local.set({ processedKeys: map });
+}
+
+// ============================================================
+// Journal des runs (persistant) — affiché dans le panneau (du + récent au + ancien)
+//   Chaque run : date/heure + liste des réunions scannées (nom, date/heure réunion,
+//   statut : downloaded / skipped / noTranscript).
+// ============================================================
+
+const RUN_LOG_MAX = 30;
+
+async function appendRun(run) {
+  const { runLog } = await chrome.storage.local.get('runLog');
+  const list = Array.isArray(runLog) ? runLog : [];
+  list.unshift(run); // plus récent en tête
+  await chrome.storage.local.set({ runLog: list.slice(0, RUN_LOG_MAX) });
 }
 
 // ============================================================
@@ -1048,6 +1078,8 @@ async function startScan(reason = 'manual') {
   if (isRunning) return;
   isRunning = true;
   const myGen = ++scanGen; // ce scan est valide tant que scanGen === myGen
+  const startedAt = Date.now();
+  const runMeetings = []; // journal du run : { name, when, status }
   startKeepAlive();
 
   // `aborted()` : le scan a-t-il été invalidé (Stop manuel ou nouveau scan) ?
@@ -1090,20 +1122,37 @@ async function startScan(reason = 'manual') {
       const label = items[i].label || `discussion ${i + 1}`;
       await setState({ current: i + 1, currentLabel: label, downloaded, message: `Discussion ${i + 1}/${total} : ${label}` });
 
-      let clickRes;
-      try { clickRes = await runInFrame(tabId, 0, frameChats, ['click', items[i].id]); } catch (e) { continue; }
-      if (!clickRes || !clickRes.ok) continue;
-      await sleepCancellable(4000, myGen); // laisse le récapitulatif + l'iframe transcript se charger
-      if (aborted()) return;
+      // Extraction avec sécurité de taille : un transcript dont le fichier fait
+      // moins de MIN_TRANSCRIPT_BYTES est jugé incomplet (chargement raté) → on
+      // ré-ouvre la discussion et on retente (jusqu'à 3 tentatives).
+      let transcript = null, text = '';
+      for (let attempt = 1; attempt <= 3 && !aborted(); attempt++) {
+        let clickRes;
+        try { clickRes = await runInFrame(tabId, 0, frameChats, ['click', items[i].id]); } catch (e) { break; }
+        if (!clickRes || !clickRes.ok) break;
+        await sleepCancellable(4000, myGen); // laisse le récap + l'iframe transcript se charger
+        if (aborted()) return;
+        try { transcript = await tryExtractCurrent(tabId, TEAMS_URL, myGen); } catch (e) { transcript = null; }
+        if (aborted()) return;
+        if (!transcript) continue;
+        text = buildTxt(transcript);
+        if (txtByteLength(text) >= MIN_TRANSCRIPT_BYTES) break; // OK
+        // Trop petit → on retente (sauf dernière tentative).
+        if (attempt < 3) await setState({ message: `Transcript incomplet, nouvelle tentative (${attempt + 1}/3) : ${label}` });
+      }
 
-      let transcript;
-      try { transcript = await tryExtractCurrent(tabId, TEAMS_URL, myGen); } catch (e) { transcript = null; }
-      if (aborted()) return;
-      if (!transcript) { noTranscript++; continue; }
+      const when = (lastDiag && lastDiag.instance && (lastDiag.instance.selected || lastDiag.instance.current)) || items[i].when || '';
+
+      if (!transcript || txtByteLength(text) < MIN_TRANSCRIPT_BYTES) {
+        noTranscript++;
+        runMeetings.push({ name: label, when, status: 'noTranscript' });
+        continue;
+      }
 
       const key = dedupKey(items[i].id, transcript);
       if (processed[key]) { // déjà traité lors d'un cycle/session précédent
         skipped++;
+        runMeetings.push({ name: label, when, status: 'skipped' });
         continue;
       }
 
@@ -1112,7 +1161,8 @@ async function startScan(reason = 'manual') {
         downloaded++;
         processed[key] = Date.now();
         await saveProcessed(processed); // persiste au fil de l'eau (survit à l'arrêt du SW)
-      } catch (e) { /* ignore download error */ }
+        runMeetings.push({ name: label, when, status: 'downloaded' });
+      } catch (e) { runMeetings.push({ name: label, when, status: 'noTranscript' }); }
       await setState({ downloaded, message: `Téléchargé : ${transcript.title} (${transcript.entries.length}) — ${downloaded} au total` });
     }
 
@@ -1121,6 +1171,7 @@ async function startScan(reason = 'manual') {
     if (downloaded === 0 && skipped === 0 && lastDiag) {
       doneMsg += ` Diag : ${JSON.stringify(lastDiag)}`;
     }
+    await appendRun({ startedAt, finishedAt: Date.now(), downloaded, skipped, noTranscript, total, meetings: runMeetings });
     await setState({ running: false, phase: 'done', downloaded, summary: { downloaded, skipped, noTranscript, total, finishedAt: Date.now() }, message: doneMsg });
   } catch (error) {
     if (!aborted()) await setState({ running: false, phase: 'error', message: 'Erreur : ' + (error && error.message ? error.message : String(error)) });

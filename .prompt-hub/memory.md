@@ -657,3 +657,22 @@
   runtime (déclaré plus bas mais initialisé avant le scan).
 - Outcome : success.
 - Next : commit branche + merge main + push.
+
+## 2026-06-18 (18) — agent (Claude)
+
+- Action : V3 — 2 fonctionnalités. (1) Sécurité taille : transcript <10Ko =
+  extraction incomplète → re-clic + re-extraction, jusqu'à 3 tentatives ; échec →
+  noTranscript (pas de téléchargement). MIN_TRANSCRIPT_BYTES=10*1024, txtByteLength
+  (TextEncoder). (2) Journal des scans en bas du panneau : appendRun stocke runLog
+  (30 derniers, plus récent en tête) {startedAt,finishedAt,downloaded,skipped,
+  noTranscript,total,meetings:[{name,when,status}]}. frameChats list renvoie 'when'
+  (time/timestamp/aria-label). panel.{html,css,js} : section "Journal des scans",
+  <details> par run (1er ouvert), statut coloré. esc() anti-injection. Écouteur
+  storage.onChanged sur runLog.
+- Fichiers : v3/background.js, v3/panel.html, v3/panel.css, v3/panel.js,
+  v3/manifest.json (3.0.13→3.0.14), .prompt-hub/version.md (0.2.14→0.2.15), releases.md.
+- Validation : node --check bg + panel OK.
+- Caveat : réunion réellement <10Ko jamais téléchargée (règle utilisateur). when
+  best-effort (souvent vide hors récurrent). Journal v3 seulement (pas v2).
+- Outcome : success.
+- Next : commit branche + merge main + push.
