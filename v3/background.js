@@ -948,6 +948,23 @@ function transcriptKey(t) {
   return 'h' + hashStr(head);
 }
 
+// Extrait l'ID de thread Teams (ex. "19:meeting_…@thread.v2") de l'id de l'élément
+// de discussion. Cet ID est STABLE entre sessions, contrairement au contenu extrait.
+function meetingThreadId(chatItemId) {
+  const m = (chatItemId || '').match(/(19:[^@\s"']+@thread\.[a-z0-9]+)/i);
+  return m ? m[1] : '';
+}
+
+// Clé de déduplication : on privilégie l'ID de thread (stable) + la date d'instance
+// pour les réunions récurrentes ; repli sur l'empreinte de contenu si l'ID est absent.
+function dedupKey(chatItemId, transcript) {
+  const tid = meetingThreadId(chatItemId);
+  if (!tid) return transcriptKey(transcript);
+  const inst = (lastDiag && lastDiag.instance) ? lastDiag.instance : null;
+  const instanceKey = inst ? normMsg(inst.selected || inst.current || '') : '';
+  return 't:' + tid + '|' + instanceKey;
+}
+
 async function getProcessed() {
   return (await chrome.storage.local.get('processedKeys')).processedKeys || {};
 }
@@ -1084,7 +1101,7 @@ async function startScan(reason = 'manual') {
       if (aborted()) return;
       if (!transcript) { noTranscript++; continue; }
 
-      const key = transcriptKey(transcript);
+      const key = dedupKey(items[i].id, transcript);
       if (processed[key]) { // déjà traité lors d'un cycle/session précédent
         skipped++;
         continue;
