@@ -6,7 +6,6 @@
 
 document.addEventListener('DOMContentLoaded', () => {
   const autoSwitch = document.getElementById('auto-switch');
-  const meetingsOnlySwitch = document.getElementById('meetings-only');
   const maxChatsInput = document.getElementById('max-chats');
   const intervalInput = document.getElementById('interval-min');
   const autoDesc = document.getElementById('auto-desc');
@@ -174,17 +173,12 @@ document.addEventListener('DOMContentLoaded', () => {
   // ---- Réglages ----
 
   async function loadSettings() {
-    const { autoEnabled, maxChats, meetingsOnly, intervalMin } = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'meetingsOnly', 'intervalMin']);
+    const { autoEnabled, maxChats, intervalMin } = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'intervalMin']);
     autoSwitch.checked = !!autoEnabled;
-    meetingsOnlySwitch.checked = meetingsOnly ?? true;
     maxChatsInput.value = Number.isFinite(maxChats) ? maxChats : 50;
     intervalInput.value = Number.isFinite(intervalMin) && intervalMin >= 1 ? intervalMin : 5;
     updateAutoDesc(intervalMin);
   }
-
-  meetingsOnlySwitch.addEventListener('change', async () => {
-    await chrome.storage.local.set({ meetingsOnly: meetingsOnlySwitch.checked });
-  });
 
   intervalInput.addEventListener('change', async () => {
     let v = parseInt(intervalInput.value, 10);

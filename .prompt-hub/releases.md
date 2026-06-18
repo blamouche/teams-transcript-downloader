@@ -1,5 +1,13 @@
 # Releases
 
+## 0.2.16 — 2026-06-18
+
+- **V3 / Suppression de l'option « Réunions uniquement » (toujours ON)**. Les
+  discussions individuelles/de groupe n'ont pas de transcript : l'option était
+  inutile. Le switch est retiré du panneau (`panel.html`/`panel.js`) et
+  `getSettings()` force désormais `meetingsOnly: true` quoi qu'il arrive. Manifest
+  3.0.14 → 3.0.15.
+
 ## 0.2.15 — 2026-06-18
 
 - **V3 / Sécurité taille + journal des scans**.
