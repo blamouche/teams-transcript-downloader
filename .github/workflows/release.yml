@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   build-and-release:
-    name: Build extension zip and publish release
+    name: Build extension zips and publish release
     runs-on: ubuntu-latest
 
     steps:
@@ -24,27 +24,33 @@ jobs:
           VERSION="${TAG#v}"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
-          echo "zip_name=teams-transcript-downloader-${TAG}.zip" >> "$GITHUB_OUTPUT"
 
-      - name: Stage plugin files
+      - name: Stage plugin files and create zips
+        id: build
         run: |
           set -euo pipefail
-          STAGE="dist/teams-transcript-downloader"
-          mkdir -p "${STAGE}/icons"
-          cp manifest.json "${STAGE}/"
-          cp content.js "${STAGE}/"
-          cp popup.html "${STAGE}/"
-          cp popup.css "${STAGE}/"
-          cp popup.js "${STAGE}/"
-          cp icons/icon16.png icons/icon48.png icons/icon128.png "${STAGE}/icons/"
-          echo "Contenu du package :"
-          find "${STAGE}" -type f | sort
-
-      - name: Create zip archive
-        run: |
-          set -euo pipefail
-          cd dist
-          zip -r "../${{ steps.vars.outputs.zip_name }}" teams-transcript-downloader
+          TAG="${GITHUB_REF_NAME}"
+          ZIPS=""
+          # Une archive par version présente (v1, v2, v3, …). On copie l'intégralité
+          # du dossier de la version pour rester agnostique aux noms de fichiers
+          # (popup.* pour v1/v2, panel.* pour v3, background.js selon les versions).
+          for V in v1 v2 v3; do
+            [ -d "${V}" ] || continue
+            [ -f "${V}/manifest.json" ] || { echo "::warning::${V}/manifest.json manquant, version ignorée"; continue; }
+            STAGE="dist/teams-transcript-downloader-${V}"
+            mkdir -p "${STAGE}"
+            cp -R "${V}/." "${STAGE}/"
+            echo "Contenu du package ${V} :"
+            find "${STAGE}" -type f | sort
+            ZIP="teams-transcript-downloader-${V}-${TAG}.zip"
+            (cd dist && zip -r "../${ZIP}" "teams-transcript-downloader-${V}")
+            ZIPS="${ZIPS}${ZIP}"$'\n'
+          done
+          {
+            echo "zips<<EOF"
+            printf '%s' "${ZIPS}"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
       - name: Publish GitHub release
         uses: softprops/action-gh-release@v2
@@ -52,4 +58,4 @@ jobs:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: ${{ steps.vars.outputs.tag }}
           generate_release_notes: true
-          files: ${{ steps.vars.outputs.zip_name }}
+          files: ${{ steps.build.outputs.zips }}
