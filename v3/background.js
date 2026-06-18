@@ -1115,6 +1115,7 @@ async function startScan(reason = 'manual') {
     let downloaded = 0;
     let skipped = 0;
     let noTranscript = 0;
+    let errored = 0;
     await setState({ phase: 'scanning', total });
 
     for (let i = 0; i < total; i++) {
@@ -1126,8 +1127,9 @@ async function startScan(reason = 'manual') {
       // Extraction avec sécurité de taille : un transcript dont le fichier fait
       // moins de MIN_TRANSCRIPT_BYTES est jugé incomplet (chargement raté) → on
       // ré-ouvre la discussion et on retente (jusqu'à 3 tentatives).
-      let transcript = null, text = '';
+      let transcript = null, text = '', bytes = 0, attempts = 0;
       for (let attempt = 1; attempt <= 3 && !aborted(); attempt++) {
+        attempts = attempt;
         let clickRes;
         try { clickRes = await runInFrame(tabId, 0, frameChats, ['click', items[i].id]); } catch (e) { break; }
         if (!clickRes || !clickRes.ok) break;
@@ -1135,25 +1137,35 @@ async function startScan(reason = 'manual') {
         if (aborted()) return;
         try { transcript = await tryExtractCurrent(tabId, TEAMS_URL, myGen); } catch (e) { transcript = null; }
         if (aborted()) return;
-        if (!transcript) continue;
+        if (!transcript) { text = ''; bytes = 0; continue; }
         text = buildTxt(transcript);
-        if (txtByteLength(text) >= MIN_TRANSCRIPT_BYTES) break; // OK
+        bytes = txtByteLength(text);
+        if (bytes >= MIN_TRANSCRIPT_BYTES) break; // OK
         // Trop petit → on retente (sauf dernière tentative).
         if (attempt < 3) await setState({ message: `Transcript incomplet, nouvelle tentative (${attempt + 1}/3) : ${label}` });
       }
 
       const when = (lastDiag && lastDiag.instance && (lastDiag.instance.selected || lastDiag.instance.current)) || items[i].when || '';
+      const diagSnapshot = lastDiag ? JSON.parse(JSON.stringify(lastDiag)) : null;
+      const dbg = { attempts, bytes, entries: transcript ? transcript.entries.length : 0, chatId: items[i].id, title: transcript ? transcript.title : null, diag: diagSnapshot };
 
-      if (!transcript || txtByteLength(text) < MIN_TRANSCRIPT_BYTES) {
+      // Aucun transcript trouvé du tout.
+      if (!transcript) {
         noTranscript++;
-        runMeetings.push({ name: label, when, status: 'noTranscript' });
+        runMeetings.push({ name: label, when, status: 'noTranscript', ...dbg });
+        continue;
+      }
+      // Transcript trouvé mais fichier < 10 Ko après 3 tentatives → ERREUR (chargement incomplet).
+      if (bytes < MIN_TRANSCRIPT_BYTES) {
+        errored++;
+        runMeetings.push({ name: label, when, status: 'error', ...dbg });
         continue;
       }
 
       const key = dedupKey(items[i].id, transcript);
       if (processed[key]) { // déjà traité lors d'un cycle/session précédent
         skipped++;
-        runMeetings.push({ name: label, when, status: 'skipped' });
+        runMeetings.push({ name: label, when, status: 'skipped', bytes, entries: transcript.entries.length });
         continue;
       }
 
@@ -1162,18 +1174,21 @@ async function startScan(reason = 'manual') {
         downloaded++;
         processed[key] = Date.now();
         await saveProcessed(processed); // persiste au fil de l'eau (survit à l'arrêt du SW)
-        runMeetings.push({ name: label, when, status: 'downloaded' });
-      } catch (e) { runMeetings.push({ name: label, when, status: 'noTranscript' }); }
+        runMeetings.push({ name: label, when, status: 'downloaded', bytes, entries: transcript.entries.length });
+      } catch (e) {
+        errored++;
+        runMeetings.push({ name: label, when, status: 'error', ...dbg, downloadError: String(e && e.message ? e.message : e) });
+      }
       await setState({ downloaded, message: `Téléchargé : ${transcript.title} (${transcript.entries.length}) — ${downloaded} au total` });
     }
 
     const unit = meetingsOnly ? 'réunion(s)' : 'discussion(s)';
-    let doneMsg = `Terminé : ${downloaded} téléchargé(s), ${skipped} déjà traité(s), ${noTranscript} sans transcript — ${total} ${unit} scannée(s).`;
+    let doneMsg = `Terminé : ${downloaded} téléchargé(s), ${skipped} déjà traité(s), ${noTranscript} sans transcript, ${errored} en erreur — ${total} ${unit} scannée(s).`;
     if (downloaded === 0 && skipped === 0 && lastDiag) {
       doneMsg += ` Diag : ${JSON.stringify(lastDiag)}`;
     }
-    await appendRun({ startedAt, finishedAt: Date.now(), downloaded, skipped, noTranscript, total, meetings: runMeetings });
-    await setState({ running: false, phase: 'done', downloaded, summary: { downloaded, skipped, noTranscript, total, finishedAt: Date.now() }, message: doneMsg });
+    await appendRun({ startedAt, finishedAt: Date.now(), downloaded, skipped, noTranscript, errored, total, meetings: runMeetings });
+    await setState({ running: false, phase: 'done', downloaded, summary: { downloaded, skipped, noTranscript, errored, total, finishedAt: Date.now() }, message: doneMsg });
   } catch (error) {
     if (!aborted()) await setState({ running: false, phase: 'error', message: 'Erreur : ' + (error && error.message ? error.message : String(error)) });
   } finally {

@@ -1,5 +1,18 @@
 # Releases
 
+## 0.2.17 — 2026-06-18
+
+- **V3 / Statut « erreur » distinct + logs de debug par run**.
+  - Un transcript trouvé mais < 10 Ko après 3 tentatives est désormais classé
+    **« erreur »** (compteur `errored`), distinct de « sans transcript » (aucun
+    transcript trouvé). Bilan et journal affichent les deux. Une erreur de
+    téléchargement compte aussi comme « erreur ».
+  - Pour chaque run comportant au moins une **erreur** ou un **sans transcript**, le
+    journal affiche un lien **« ⬇ Logs de debug »** : il télécharge un JSON par run
+    avec, pour chaque réunion problématique, le diagnostic d'extraction (`lastDiag` :
+    chemin, score, frame, raison, instance), le nombre de tentatives, la taille
+    obtenue, le nombre d'entrées et l'ID de discussion. Manifest 3.0.15 → 3.0.16.
+
 ## 0.2.16 — 2026-06-18
 
 - **V3 / Suppression de l'option « Réunions uniquement » (toujours ON)**. Les

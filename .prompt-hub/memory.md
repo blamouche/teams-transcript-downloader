@@ -688,3 +688,19 @@
 - Validation : node --check panel + bg OK. v2 non touché.
 - Outcome : success.
 - Next : commit branche + merge main + push.
+
+## 2026-06-18 (20) — agent (Claude)
+
+- Action : V3 — (1) statut 'error' distinct pour transcript <10Ko après 3 tentatives
+  (compteur errored), séparé de noTranscript (aucun transcript). Erreur de download
+  → error aussi. Bilan + doneMsg + summary incluent errored. (2) Logs de debug par
+  run : runMeetings stocke pour chaque réunion {attempts,bytes,entries,chatId,title,
+  diag:snapshot(lastDiag)} ; panel affiche un lien « ⬇ Logs de debug » si errored>0
+  ou noTranscript>0 → télécharge un JSON (Blob+anchor) du run. RUN_STATUS.error,
+  styles .rm-status.error + .run-dl. currentRuns gardé pour le download (délégation
+  de clic).
+- Fichiers : v3/background.js, v3/panel.js, v3/panel.css, v3/manifest.json
+  (3.0.15→3.0.16), .prompt-hub/version.md (0.2.16→0.2.17), releases.md.
+- Validation : node --check bg + panel OK.
+- Outcome : success.
+- Next : commit branche + merge main + push.
