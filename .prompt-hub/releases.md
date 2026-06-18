@@ -1,5 +1,24 @@
 # Releases
 
+## 0.2.3 — 2026-06-18
+
+- **V3 / Correctif : le panneau ne s'affichait jamais (ouverture synchrone)**. En
+  service worker MV3, `chrome.sidePanel.open()` échoue dès qu'un `await` précède
+  l'appel (le geste utilisateur expire) ; et sans `default_path` il n'a aucun
+  contenu. Deux changements :
+  - `side_panel.default_path` rétabli dans le manifest (le panneau a un contenu).
+  - Le handler `action.onClicked` n'est plus `async` : `chrome.sidePanel.open()` est
+    appelé **en premier, de façon synchrone**, ciblant la fenêtre Teams dédiée si
+    son id est connu (gardé EN MÉMOIRE du SW, réhydraté au démarrage), sinon la
+    fenêtre courante. Le travail asynchrone (création de la fenêtre, voile, focus)
+    suit sans bloquer l'ouverture.
+  - Ainsi le panneau s'affiche dès le 1er clic ; une fois la fenêtre Teams créée,
+    les clics suivants attachent le panneau à cette fenêtre.
+  - Compromis : avec `default_path`, le panneau redevient disponible globalement
+    (et le 1er clic l'affiche sur la fenêtre courante). La restriction stricte
+    « uniquement l'onglet Teams » est incompatible avec une ouverture synchrone
+    fiable. Manifest 3.0.2 → 3.0.3.
+
 ## 0.2.2 — 2026-06-18
 
 - **V3 / Correctif : le panneau latéral ne s'affichait pas**. `chrome.sidePanel.open()`

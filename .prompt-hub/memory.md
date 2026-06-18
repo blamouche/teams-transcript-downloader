@@ -463,3 +463,24 @@
   panneau (fenêtre alors déjà ouverte). À confirmer en réel par l'utilisateur.
 - Outcome : success (en attente de validation navigateur).
 - Next : commit `fix(v3): open side panel within user gesture` + push.
+
+## 2026-06-18 (6) — agent (Claude)
+
+- Action : V3 — le panneau ne s'affichait JAMAIS. Cause : en SW MV3,
+  chrome.sidePanel.open() échoue dès qu'un await le précède (geste expiré), et sans
+  default_path il n'a pas de contenu. Fix : (1) side_panel.default_path rétabli ;
+  (2) action.onClicked rendu NON-async, open() appelé en premier de façon SYNCHRONE,
+  ciblant dedicatedWindowId si connu (gardé en mémoire du SW via setDedicated +
+  réhydraté au démarrage), sinon tab.windowId courant ; le reste (ensureTeamsTab,
+  voile, focus) en async après. Compromis assumé : default_path rend le panneau
+  disponible globalement et le 1er clic l'affiche sur la fenêtre courante ; la
+  restriction stricte "uniquement Teams" est incompatible avec un open() synchrone
+  fiable.
+- Fichiers : v3/background.js (vars module dedicatedTabId/WindowId + setDedicated/
+  clearDedicated + réhydratation), v3/manifest.json (3.0.2→3.0.3, +default_path),
+  README.md, .prompt-hub/version.md (0.2.2→0.2.3), releases.md.
+- Validation : node --check OK, manifest JSON OK. À TESTER en navigateur par l'user.
+- Leçon : sidePanel.open() doit être appelé sync (sans await) dans le gesture ;
+  garder les id en mémoire du SW pour cibler une fenêtre sans storage.get préalable.
+- Outcome : success (en attente validation navigateur).
+- Next : commit `fix(v3): open side panel synchronously so it actually shows` + push.

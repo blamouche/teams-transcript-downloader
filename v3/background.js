@@ -26,6 +26,25 @@ let scanGen = 0;
 let isRunning = false;
 let pendingAutoStart = false; // une relance auto est demandée dès la fin du scan courant
 
+// Identifiants de la fenêtre/onglet Teams dédié, gardés EN MÉMOIRE du SW (en plus
+// de chrome.storage). Indispensable pour que `chrome.sidePanel.open()` puisse être
+// appelé de façon SYNCHRONE dans le handler de clic : cette API exige un geste
+// utilisateur actif, que le moindre `await` (ex. storage.get) ferait expirer.
+let dedicatedTabId = null;
+let dedicatedWindowId = null;
+
+function setDedicated(tabId, windowId) {
+  dedicatedTabId = tabId != null ? tabId : null;
+  dedicatedWindowId = windowId != null ? windowId : null;
+  return chrome.storage.local.set({ dedicatedTabId, dedicatedWindowId });
+}
+
+function clearDedicated() {
+  dedicatedTabId = null;
+  dedicatedWindowId = null;
+  return chrome.storage.local.remove(['dedicatedTabId', 'dedicatedWindowId']);
+}
+
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 // Sommeil annulable : se réveille tôt si le scan a été invalidé (Stop / nouveau scan),
@@ -237,13 +256,16 @@ async function enablePanelForTab(tabId) {
 // Initialisation à chaque réveil du service worker.
 setAppIcon();
 updateActionUI().catch(() => {});
-// On NE veut PAS l'ouverture automatique globale : le clic sur l'icône est géré
-// par chrome.action.onClicked pour cibler la fenêtre Teams dédiée.
+// On gère le clic nous-mêmes (chrome.action.onClicked) pour cibler la fenêtre
+// Teams dédiée → l'ouverture automatique globale doit rester désactivée.
 try { chrome.sidePanel.setPanelBehavior({ openPanelOnActionClick: false }).catch(() => {}); } catch (e) { /* API indisponible */ }
-// Réapplique le voile + l'activation du panneau si le SW redémarre alors qu'un
-// onglet dédié existe déjà.
-showOverlayOnDedicated().catch(() => {});
-chrome.storage.local.get('dedicatedTabId').then(({ dedicatedTabId }) => enablePanelForTab(dedicatedTabId)).catch(() => {});
+// Réhydrate les id en mémoire (pour l'ouverture synchrone du panneau au clic) +
+// réapplique le voile / l'activation du panneau si un onglet dédié existe déjà.
+chrome.storage.local.get(['dedicatedTabId', 'dedicatedWindowId']).then((s) => {
+  dedicatedTabId = s.dedicatedTabId != null ? s.dedicatedTabId : null;
+  dedicatedWindowId = s.dedicatedWindowId != null ? s.dedicatedWindowId : null;
+  if (dedicatedTabId != null) { enablePanelForTab(dedicatedTabId).catch(() => {}); showOverlay(dedicatedTabId).catch(() => {}); }
+}).catch(() => {});
 
 // ============================================================
 // Fonctions injectées dans les frames (identiques côté logique à la V1/V2)
@@ -752,11 +774,12 @@ function isTeamsUrl(url) {
 // ne pas impacter ses autres onglets. Le panneau latéral est activé pour ce seul
 // onglet, et le voile y est appliqué.
 async function ensureTeamsTab() {
-  const { dedicatedTabId } = await chrome.storage.local.get('dedicatedTabId');
-  if (dedicatedTabId != null) {
+  const stored = await chrome.storage.local.get('dedicatedTabId');
+  if (stored.dedicatedTabId != null) {
     try {
-      const t = await chrome.tabs.get(dedicatedTabId);
+      const t = await chrome.tabs.get(stored.dedicatedTabId);
       if (t && isTeamsUrl(t.url || t.pendingUrl)) {
+        await setDedicated(t.id, t.windowId);
         await enablePanelForTab(t.id);
         showOverlay(t.id).catch(() => {});
         return t.id;
@@ -767,7 +790,7 @@ async function ensureTeamsTab() {
   const win = await chrome.windows.create({ url: TEAMS_URL, focused: true });
   const tab = win && win.tabs && win.tabs[0];
   const tabId = tab ? tab.id : undefined;
-  await chrome.storage.local.set({ dedicatedTabId: tabId, dedicatedWindowId: win.id });
+  await setDedicated(tabId, win.id);
   await enablePanelForTab(tabId);
   // Le voile sera appliqué quand la page aura fini de charger (chrome.tabs.onUpdated).
   return tabId;
@@ -1092,49 +1115,35 @@ chrome.runtime.onStartup.addListener(async () => {
   if (autoEnabled && !isRunning) startScan('auto');
 });
 
-// Clic sur l'icône : ouvre (ou refocalise) la fenêtre Teams dédiée et y attache le
-// panneau latéral. Aucune action sur les autres onglets/fenêtres.
+// Clic sur l'icône : ouvre le panneau latéral et garantit la fenêtre Teams dédiée.
 //
-// IMPORTANT : chrome.sidePanel.open() exige un geste utilisateur actif. Chaque
-// `await` rapproche de son expiration, donc on appelle open() avec le MOINS
-// d'await possible avant lui (surtout pas après chrome.windows.create, trop long).
-chrome.action.onClicked.addListener(async () => {
-  const { dedicatedWindowId, dedicatedTabId } = await chrome.storage.local.get(['dedicatedWindowId', 'dedicatedTabId']);
-
-  // 1) Fenêtre dédiée déjà ouverte → on attache le panneau tout de suite
-  //    (un seul await avant open() : le geste est préservé).
-  if (dedicatedWindowId != null) {
-    let exists = true;
-    try { await chrome.windows.get(dedicatedWindowId); } catch (e) { exists = false; }
-    if (exists) {
-      try { await chrome.sidePanel.open({ windowId: dedicatedWindowId }); } catch (e) { /* ignore */ }
-      enablePanelForTab(dedicatedTabId).catch(() => {});
-      chrome.windows.update(dedicatedWindowId, { focused: true }).catch(() => {});
-      showOverlay(dedicatedTabId).catch(() => {});
-      return;
-    }
+// IMPORTANT : chrome.sidePanel.open() exige un geste utilisateur actif que le
+// moindre `await` ferait expirer. Le listener n'est donc PAS async et open() est
+// appelé de façon SYNCHRONE, en premier, en ciblant :
+//   - la fenêtre Teams dédiée si on en connaît déjà l'id (en mémoire du SW) ;
+//   - sinon la fenêtre courante (le panneau s'affiche immédiatement ; un prochain
+//     clic l'attachera à la fenêtre Teams, une fois celle-ci créée).
+// Tout le travail asynchrone (création/voile/focus) suit, sans bloquer open().
+chrome.action.onClicked.addListener((tab) => {
+  const targetWindowId = (dedicatedWindowId != null) ? dedicatedWindowId : (tab && tab.windowId);
+  if (targetWindowId != null) {
+    try { const p = chrome.sidePanel.open({ windowId: targetWindowId }); if (p && p.catch) p.catch(() => {}); }
+    catch (e) { /* API indisponible */ }
   }
-
-  // 2) Pas de fenêtre dédiée → on la crée, puis on tente d'attacher le panneau.
-  //    La création de fenêtre peut faire expirer le geste : si open() échoue, le
-  //    panneau reste activé pour l'onglet et un second clic l'affichera.
-  const created = await chrome.windows.create({ url: TEAMS_URL, focused: true });
-  const newTabId = created.tabs && created.tabs[0] ? created.tabs[0].id : undefined;
-  await chrome.storage.local.set({ dedicatedTabId: newTabId, dedicatedWindowId: created.id });
-  await enablePanelForTab(newTabId);
-  try { await chrome.sidePanel.open({ windowId: created.id }); } catch (e) { /* reclic affichera le panneau */ }
+  (async () => {
+    await ensureTeamsTab(); // crée/réutilise la fenêtre dédiée (+ voile, + id en mémoire)
+    if (dedicatedWindowId != null) chrome.windows.update(dedicatedWindowId, { focused: true }).catch(() => {});
+  })().catch(() => {});
 });
 
 // Si l'onglet dédié est fermé, on oublie ses id.
-chrome.tabs.onRemoved.addListener(async (tabId) => {
-  const { dedicatedTabId } = await chrome.storage.local.get('dedicatedTabId');
-  if (dedicatedTabId === tabId) await chrome.storage.local.remove(['dedicatedTabId', 'dedicatedWindowId']);
+chrome.tabs.onRemoved.addListener((tabId) => {
+  if (dedicatedTabId === tabId) clearDedicated().catch(() => {});
 });
 
 // Si la fenêtre dédiée est fermée, on oublie ses id.
-chrome.windows.onRemoved.addListener(async (windowId) => {
-  const { dedicatedWindowId } = await chrome.storage.local.get('dedicatedWindowId');
-  if (dedicatedWindowId === windowId) await chrome.storage.local.remove(['dedicatedTabId', 'dedicatedWindowId']);
+chrome.windows.onRemoved.addListener((windowId) => {
+  if (dedicatedWindowId === windowId) clearDedicated().catch(() => {});
 });
 
 // Un rechargement de l'onglet dédié efface le voile injecté dans le DOM : on le
