@@ -718,3 +718,12 @@
 - Validation : node --check OK.
 - Outcome : success.
 - Next : commit branche + merge main + push.
+
+## 2026-06-18 (22) — agent (Claude)
+
+- Action : V3 — suppression de max-height:320px + overflow-y:auto sur .run-log
+  (journal des scans) ; le contenu s'affiche en entier, le panneau défile.
+- Fichiers : v3/panel.css, v3/manifest.json (3.0.17→3.0.18),
+  .prompt-hub/version.md (0.2.18→0.2.19), releases.md.
+- Outcome : success.
+- Next : commit branche + merge main + push.
