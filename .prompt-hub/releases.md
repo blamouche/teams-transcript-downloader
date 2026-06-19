@@ -1,5 +1,18 @@
 # Releases
 
+## 0.3.1 — 2026-06-19
+
+- **CI / Release automatique à chaque commit sur `main`**. Le workflow
+  `.github/workflows/release.yml` se déclenchait uniquement sur les tags `v*`.
+  Il se déclenche désormais sur `push` vers `main` : il lit la version
+  applicative dans `.prompt-hub/version.md`, forge un tag **unique par commit**
+  `v<version>-<short_sha>` (évite les collisions de tag), construit **un zip par
+  version** (`v1`, `v2`, `v3`) et publie une release GitHub avec les 3 zips en
+  assets + notes auto-générées. Ajout d'un `concurrency` (`release-main`,
+  `cancel-in-progress: false`) pour sérialiser les builds, et de
+  `target_commitish: github.sha` pour ancrer le tag sur le commit. La boucle de
+  packaging v1/v2/v3 est inchangée. README mis à jour (section Release).
+
 ## 0.3.0 — 2026-06-19
 
 - **V3 / Paramètres avancés : plages horaires du scan automatique**. Nouvelle

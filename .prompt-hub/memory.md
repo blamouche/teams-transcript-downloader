@@ -747,3 +747,20 @@
 - Validation : node --check bg + panel OK.
 - Outcome : success.
 - Next : commit branche feat/scan-schedule-window + merge main + push.
+
+## 2026-06-19 (24) — agent (Claude)
+
+- Action : CI — release automatique à chaque commit sur main. Réécriture de
+  .github/workflows/release.yml : déclencheur on.push.branches:[main] (au lieu de
+  on.push.tags:v*). Step "Determine version and tag" lit
+  .prompt-hub/version.md (head -n1) -> VERSION, git rev-parse --short HEAD ->
+  SHORT_SHA, TAG=v${VERSION}-${SHORT_SHA} (unique par commit). Boucle de
+  packaging v1/v2/v3 conservée (un zip par version). softprops/action-gh-release@v2
+  avec target_commitish=github.sha, generate_release_notes. Ajout
+  concurrency release-main cancel-in-progress:false.
+- Fichiers : .github/workflows/release.yml, README.md (section Release réécrite),
+  .prompt-hub/version.md (0.3.0->0.3.1), releases.md,
+  todo/todo-20260619-103055-ci-release-on-main.md.
+- Validation : YAML OK (ruby YAML.load_file). actionlint non installé.
+- Outcome : success.
+- Next : commit + push sur main (déclenchera la 1re release auto).

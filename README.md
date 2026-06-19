@@ -294,21 +294,19 @@ La publication des releases est entièrement automatisée par le workflow
 
 ### Déclencher une release
 
-1. Mettre à jour la version dans `v1/manifest.json` / `v2/manifest.json` /
-   `v3/manifest.json` si nécessaire.
-2. Créer un tag versionné (préfixe `v`) et le pousser :
-   ```bash
-   git tag v3.0.0
-   git push origin v3.0.0
-   ```
-3. Le workflow GitHub Actions s'exécute automatiquement :
-   - construit, pour **chaque version présente** (`v1`, `v2`, `v3`), un dossier
-     temporaire reprenant l'intégralité des fichiers de la version (manifest, JS,
-     HTML/CSS — `popup.*` pour v1/v2, `panel.*` pour v3 —, `background.js` le cas
-     échéant, et `icons/`),
-   - les zippe sous `teams-transcript-downloader-v{1,2,3}-<tag>.zip`,
-   - crée une release GitHub portant le nom du tag, avec les zips en assets et des
-     notes de release auto-générées (`generate_release_notes`).
+La release est **automatique à chaque commit poussé sur `main`** — aucun tag à
+créer manuellement. Le workflow GitHub Actions :
+
+1. lit la version applicative dans `.prompt-hub/version.md` et forge un tag
+   **unique par commit** : `v<version>-<short_sha>` (ex. `v0.3.0-8f56762`),
+2. construit, pour **chaque version présente** (`v1`, `v2`, `v3`), un dossier
+   temporaire reprenant l'intégralité des fichiers de la version (manifest, JS,
+   HTML/CSS — `popup.*` pour v1/v2, `panel.*` pour v3 —, `background.js` le cas
+   échéant, et `icons/`),
+3. les zippe sous `teams-transcript-downloader-v{1,2,3}-<tag>.zip` (un zip par
+   version),
+4. crée une release GitHub portant le nom du tag, avec les **3 zips** en assets et
+   des notes de release auto-générées (`generate_release_notes`).
 
 ### Contenu des zips
 

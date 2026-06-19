@@ -2,11 +2,17 @@ name: Release
 
 on:
   push:
-    tags:
-      - 'v*'
+    branches:
+      - main
 
 permissions:
   contents: write
+
+# Un seul build de release à la fois ; on n'annule pas un build en cours pour
+# ne pas laisser une release à moitié publiée.
+concurrency:
+  group: release-main
+  cancel-in-progress: false
 
 jobs:
   build-and-release:
@@ -17,19 +23,29 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Determine version
+      - name: Determine version and tag
         id: vars
         run: |
-          TAG="${GITHUB_REF_NAME}"
-          VERSION="${TAG#v}"
-          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          set -euo pipefail
+          # Version applicative suivie dans le repo ; à défaut 0.0.0.
+          if [ -f ".prompt-hub/version.md" ]; then
+            VERSION="$(head -n1 .prompt-hub/version.md | tr -d '[:space:]')"
+          else
+            VERSION="0.0.0"
+          fi
+          SHORT_SHA="$(git rev-parse --short HEAD)"
+          # Tag unique par commit -> pas de collision entre deux releases.
+          TAG="v${VERSION}-${SHORT_SHA}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "short_sha=${SHORT_SHA}" >> "$GITHUB_OUTPUT"
+          echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          echo "Release tag: ${TAG}"
 
       - name: Stage plugin files and create zips
         id: build
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ steps.vars.outputs.tag }}"
           ZIPS=""
           # Une archive par version présente (v1, v2, v3, …). On copie l'intégralité
           # du dossier de la version pour rester agnostique aux noms de fichiers
@@ -57,5 +73,6 @@ jobs:
         with:
           tag_name: ${{ steps.vars.outputs.tag }}
           name: ${{ steps.vars.outputs.tag }}
+          target_commitish: ${{ github.sha }}
           generate_release_notes: true
           files: ${{ steps.build.outputs.zips }}
