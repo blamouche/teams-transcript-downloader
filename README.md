@@ -28,6 +28,7 @@ La V2 déporte toute l'orchestration dans un **service worker** ([`background.js
 - l'**Automatisation est OFF par défaut** (rien ne se lance à l'installation) ; une fois activée, le scan démarre **immédiatement**, puis **se relance en boucle** avec une **pause paramétrable entre deux scans** (défaut **5 min**, via `chrome.alarms`) et un **compte à rebours** dans la popup ; il redémarre aussi au lancement du navigateur ;
 - le scan peut être **arrêté manuellement** en cours (bouton **Arrêter**) ;
 - le nombre de discussions scannées est **paramétrable** (les N premières, défaut **50**, `0` = toutes) ;
+- des **Paramètres avancés** permettent de **restreindre le scan automatique** à des **jours** (Lun→Dim) et une **plage horaire** (heure de début/fin) ; hors plage l'automatisation reste active mais ne scanne pas et **planifie le prochain scan à l'ouverture de la prochaine fenêtre** (le scan manuel reste toujours disponible ; OFF par défaut) ;
 - option **« Réunions uniquement »** (activée par défaut) : ne scanne que les chats de réunion, en s'appuyant sur l'icône d'avatar générique (`span.fui-Avatar__icon` sans `[data-tid="PersonaAvatar"]`), et ignore les chats individuels (avatar + badge de présence) et de groupe (photo).
 
 Déroulé du scan, pour chaque discussion du bloc **Discussions** :

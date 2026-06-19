@@ -1,5 +1,19 @@
 # Releases
 
+## 0.3.0 — 2026-06-19
+
+- **V3 / Paramètres avancés : plages horaires du scan automatique**. Nouvelle
+  section repliable « Paramètres avancés » dans le panneau, avec un interrupteur
+  « Restreindre les horaires » : quand il est activé, le **scan automatique** ne
+  se lance que les **jours** (puces Lun→Dim) et dans la **plage horaire** (heure
+  de début / de fin) choisis. Hors plage, l'automatisation reste active mais ne
+  scanne pas : elle planifie le prochain scan à l'ouverture de la prochaine
+  fenêtre autorisée (le compte à rebours du panneau reflète cette échéance). Le
+  scan **manuel** (« Extraire manuellement ») reste toujours disponible. Les
+  plages traversant minuit sont gérées. Par défaut désactivé → comportement
+  inchangé. Réglages : `scheduleEnabled`, `scheduleDays`, `scheduleStart`,
+  `scheduleEnd` dans `chrome.storage.local`. Manifest 3.0.18 → 3.0.19.
+
 ## 0.2.19 — 2026-06-18
 
 - **V3 / Journal des scans : suppression de la limite de hauteur**. La zone du

@@ -8,6 +8,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const autoSwitch = document.getElementById('auto-switch');
   const maxChatsInput = document.getElementById('max-chats');
   const intervalInput = document.getElementById('interval-min');
+  const scheduleSwitch = document.getElementById('schedule-switch');
+  const scheduleFields = document.getElementById('schedule-fields');
+  const scheduleDaysEl = document.getElementById('schedule-days');
+  const scheduleStartInput = document.getElementById('schedule-start');
+  const scheduleEndInput = document.getElementById('schedule-end');
+  const scheduleHint = document.getElementById('schedule-hint');
   const autoDesc = document.getElementById('auto-desc');
   const stopBtn = document.getElementById('stop-btn');
   const extractBtn = document.getElementById('extract-btn');
@@ -213,13 +219,72 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // ---- Réglages ----
 
+  const DAY_NAMES = { 0: 'Dim', 1: 'Lun', 2: 'Mar', 3: 'Mer', 4: 'Jeu', 5: 'Ven', 6: 'Sam' };
+  const DEFAULT_DAYS = [1, 2, 3, 4, 5];
+
+  // Lecture des jours sélectionnés depuis les puces actives (ordre Lun→Dim).
+  function readSelectedDays() {
+    return [...scheduleDaysEl.querySelectorAll('.day-chip.active')]
+      .map(b => parseInt(b.dataset.day, 10));
+  }
+
+  function renderScheduleHint() {
+    const days = readSelectedDays();
+    if (!scheduleSwitch.checked) {
+      scheduleHint.textContent = 'Le scan automatique tourne sans restriction horaire.';
+      return;
+    }
+    if (!days.length) {
+      scheduleHint.textContent = 'Aucun jour sélectionné : le scan automatique ne se lancera jamais.';
+      return;
+    }
+    const order = [1, 2, 3, 4, 5, 6, 0];
+    const lbl = order.filter(d => days.includes(d)).map(d => DAY_NAMES[d]).join(', ');
+    scheduleHint.textContent = `Scan auto : ${lbl} de ${scheduleStartInput.value} à ${scheduleEndInput.value}.`;
+  }
+
+  function applyScheduleEnabled() {
+    scheduleFields.classList.toggle('disabled', !scheduleSwitch.checked);
+    renderScheduleHint();
+  }
+
+  async function saveSchedule() {
+    await chrome.storage.local.set({
+      scheduleEnabled: scheduleSwitch.checked,
+      scheduleDays: readSelectedDays(),
+      scheduleStart: scheduleStartInput.value || '08:00',
+      scheduleEnd: scheduleEndInput.value || '18:00'
+    });
+    renderScheduleHint();
+  }
+
   async function loadSettings() {
-    const { autoEnabled, maxChats, intervalMin } = await chrome.storage.local.get(['autoEnabled', 'maxChats', 'intervalMin']);
+    const { autoEnabled, maxChats, intervalMin, scheduleEnabled, scheduleDays, scheduleStart, scheduleEnd } =
+      await chrome.storage.local.get(['autoEnabled', 'maxChats', 'intervalMin', 'scheduleEnabled', 'scheduleDays', 'scheduleStart', 'scheduleEnd']);
     autoSwitch.checked = !!autoEnabled;
     maxChatsInput.value = Number.isFinite(maxChats) ? maxChats : 50;
     intervalInput.value = Number.isFinite(intervalMin) && intervalMin >= 1 ? intervalMin : 5;
     updateAutoDesc(intervalMin);
+
+    scheduleSwitch.checked = !!scheduleEnabled;
+    const days = Array.isArray(scheduleDays) ? scheduleDays : DEFAULT_DAYS;
+    scheduleDaysEl.querySelectorAll('.day-chip').forEach(b => {
+      b.classList.toggle('active', days.includes(parseInt(b.dataset.day, 10)));
+    });
+    scheduleStartInput.value = typeof scheduleStart === 'string' ? scheduleStart : '08:00';
+    scheduleEndInput.value = typeof scheduleEnd === 'string' ? scheduleEnd : '18:00';
+    applyScheduleEnabled();
   }
+
+  scheduleSwitch.addEventListener('change', async () => { applyScheduleEnabled(); await saveSchedule(); });
+  scheduleDaysEl.addEventListener('click', async (e) => {
+    const chip = e.target.closest('.day-chip');
+    if (!chip) return;
+    chip.classList.toggle('active');
+    await saveSchedule();
+  });
+  scheduleStartInput.addEventListener('change', saveSchedule);
+  scheduleEndInput.addEventListener('change', saveSchedule);
 
   intervalInput.addEventListener('change', async () => {
     let v = parseInt(intervalInput.value, 10);

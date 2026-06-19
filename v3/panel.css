@@ -156,6 +156,106 @@ header h1 {
   box-shadow: 0 0 0 2px rgba(98, 100, 167, 0.3);
 }
 
+/* --- Paramètres avancés (planification du scan auto) --- */
+.advanced {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #eee;
+}
+
+.advanced > summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6264a7;
+  list-style: none;
+  user-select: none;
+}
+
+.advanced > summary::-webkit-details-marker { display: none; }
+
+.advanced > summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 6px;
+  transition: transform 0.15s ease;
+}
+
+.advanced[open] > summary::before { transform: rotate(90deg); }
+
+.schedule-fields {
+  margin-top: 10px;
+  transition: opacity 0.15s ease;
+}
+
+.schedule-fields.disabled {
+  opacity: 0.45;
+  pointer-events: none;
+}
+
+.schedule-days {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.day-chip {
+  flex: 1 1 auto;
+  min-width: 38px;
+  padding: 6px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  background: #f0f0f4;
+  border: 1px solid #d8d8e0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.day-chip:hover { background: #e7e7ee; }
+
+.day-chip.active {
+  background: #6264a7;
+  color: #fff;
+  border-color: #6264a7;
+}
+
+.schedule-times {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  margin-top: 12px;
+  font-size: 13px;
+  color: #333;
+}
+
+.schedule-times label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.schedule-times input[type="time"] {
+  padding: 5px 8px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+}
+
+.schedule-times input[type="time"]:focus {
+  outline: none;
+  border-color: #6264a7;
+  box-shadow: 0 0 0 2px rgba(98, 100, 167, 0.3);
+}
+
+.schedule-hint {
+  display: block;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #888;
+}
+
 .progress-wrap {
   margin-top: 10px;
   height: 6px;

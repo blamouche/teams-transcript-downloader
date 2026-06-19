@@ -66,6 +66,63 @@ async function getSettings() {
   };
 }
 
+// ---- Planification du scan automatique (jours + plage horaire) ----
+// Réglages stockés : scheduleEnabled (bool), scheduleDays (jours autorisés au
+// format getDay() : 0=dim … 6=sam), scheduleStart / scheduleEnd ("HH:MM").
+const SCHEDULE_DEFAULTS = { scheduleEnabled: false, scheduleDays: [1, 2, 3, 4, 5], scheduleStart: '08:00', scheduleEnd: '18:00' };
+
+async function getSchedule() {
+  const s = await chrome.storage.local.get(['scheduleEnabled', 'scheduleDays', 'scheduleStart', 'scheduleEnd']);
+  return {
+    scheduleEnabled: !!s.scheduleEnabled,
+    scheduleDays: Array.isArray(s.scheduleDays) ? s.scheduleDays : SCHEDULE_DEFAULTS.scheduleDays,
+    scheduleStart: typeof s.scheduleStart === 'string' ? s.scheduleStart : SCHEDULE_DEFAULTS.scheduleStart,
+    scheduleEnd: typeof s.scheduleEnd === 'string' ? s.scheduleEnd : SCHEDULE_DEFAULTS.scheduleEnd
+  };
+}
+
+// "HH:MM" → minutes depuis minuit, ou null si invalide.
+function parseHM(str) {
+  const m = /^(\d{1,2}):(\d{2})$/.exec(String(str || ''));
+  if (!m) return null;
+  const h = +m[1], mn = +m[2];
+  if (h > 23 || mn > 59) return null;
+  return h * 60 + mn;
+}
+
+// L'instant `now` tombe-t-il dans une fenêtre autorisée ?
+// Gère les plages qui traversent minuit (début > fin).
+function isWithinSchedule(sched, now = new Date()) {
+  if (!sched.scheduleEnabled) return true;
+  const start = parseHM(sched.scheduleStart);
+  const end = parseHM(sched.scheduleEnd);
+  if (start == null || end == null) return true; // réglage incomplet → pas de blocage
+  const day = now.getDay();
+  const cur = now.getHours() * 60 + now.getMinutes();
+  if (start <= end) {
+    return sched.scheduleDays.includes(day) && cur >= start && cur < end;
+  }
+  // Plage nocturne : la portion avant `end` appartient au jour de début (veille).
+  const prevDay = (day + 6) % 7;
+  return (sched.scheduleDays.includes(day) && cur >= start)
+    || (sched.scheduleDays.includes(prevDay) && cur < end);
+}
+
+// Prochaine ouverture de fenêtre strictement après `from` (timestamp ms), ou null.
+function nextWindowStart(sched, from = new Date()) {
+  const start = parseHM(sched.scheduleStart);
+  if (start == null || !sched.scheduleDays.length) return null;
+  for (let i = 0; i < 8; i++) {
+    const d = new Date(from);
+    d.setDate(d.getDate() + i);
+    d.setHours(Math.floor(start / 60), start % 60, 0, 0);
+    if (d.getTime() > from.getTime() && sched.scheduleDays.includes(d.getDay())) {
+      return d.getTime();
+    }
+  }
+  return null;
+}
+
 async function setState(partial) {
   const cur = (await chrome.storage.local.get('scanState')).scanState || {};
   const next = { ...cur, ...partial, updatedAt: Date.now() };
@@ -1254,7 +1311,7 @@ async function startScan(reason = 'manual') {
     //     QUELLE QUE SOIT l'issue (done, erreur, vide…). Ainsi le compte à rebours
     //     réapparaît toujours et la boucle ne meurt jamais silencieusement.
     if (scanGen !== myGen) {
-      if (pendingAutoStart) { pendingAutoStart = false; startScan('auto'); }
+      if (pendingAutoStart) { pendingAutoStart = false; maybeStartAuto('auto'); }
     } else {
       const { autoEnabled } = await getSettings();
       if (autoEnabled) await scheduleNextRun();
@@ -1297,33 +1354,64 @@ function stopKeepAlive() { chrome.alarms.clear('keepalive'); }
 
 async function scheduleNextRun() {
   const { intervalMin } = await getSettings();
+  const sched = await getSchedule();
   const mins = Math.max(1, intervalMin);
+  let target = Date.now() + mins * 60000;
+  let message = `Prochain scan dans ${mins} min…`;
+
+  // Si le prochain tick tombe hors plage, on saute directement à l'ouverture
+  // de la prochaine fenêtre autorisée plutôt que de re-scanner inutilement.
+  if (sched.scheduleEnabled && !isWithinSchedule(sched, new Date(target))) {
+    const next = nextWindowStart(sched, new Date());
+    if (next == null) {
+      await chrome.alarms.clear('autoStart');
+      await setState({ phase: 'idle', nextRunAt: null, message: 'Hors plage horaire planifiée : aucun jour sélectionné.' });
+      return;
+    }
+    target = next;
+    message = 'Hors plage horaire : prochain scan planifié à l\'ouverture suivante.';
+  }
+
   await chrome.alarms.clear('autoStart');
-  chrome.alarms.create('autoStart', { delayInMinutes: mins });
+  chrome.alarms.create('autoStart', { when: target });
   // nextRunAt permet à la popup d'afficher un compte à rebours.
-  await setState({ phase: 'idle', nextRunAt: Date.now() + mins * 60000, message: `Prochain scan dans ${mins} min…` });
+  await setState({ phase: 'idle', nextRunAt: target, message });
 }
 
 async function cancelAutoStart() {
   await chrome.alarms.clear('autoStart');
 }
 
+// Déclenche un scan auto si l'automatisation est active ET qu'on est dans la
+// plage horaire autorisée ; sinon planifie l'ouverture de la prochaine fenêtre.
+async function maybeStartAuto(reason = 'auto') {
+  const { autoEnabled } = await getSettings();
+  if (!autoEnabled || isRunning) return;
+  const sched = await getSchedule();
+  if (isWithinSchedule(sched)) { startScan(reason); return; }
+  const next = nextWindowStart(sched, new Date());
+  await chrome.alarms.clear('autoStart');
+  if (next == null) {
+    await setState({ phase: 'idle', nextRunAt: null, message: 'Hors plage horaire planifiée : aucun jour sélectionné.' });
+    return;
+  }
+  chrome.alarms.create('autoStart', { when: next });
+  await setState({ phase: 'idle', nextRunAt: next, message: 'Hors plage horaire : prochain scan planifié à l\'ouverture suivante.' });
+}
+
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === 'autoStart') {
-    const { autoEnabled } = await getSettings();
-    if (autoEnabled && !isRunning) startScan('auto');
+    await maybeStartAuto('auto');
   }
   // 'keepalive' : ne rien faire, le simple réveil suffit.
 });
 
 chrome.runtime.onInstalled.addListener(async () => {
-  const { autoEnabled } = await getSettings();
-  if (autoEnabled && !isRunning) startScan('auto');
+  await maybeStartAuto('auto');
 });
 
 chrome.runtime.onStartup.addListener(async () => {
-  const { autoEnabled } = await getSettings();
-  if (autoEnabled && !isRunning) startScan('auto');
+  await maybeStartAuto('auto');
 });
 
 // Clic sur l'icône : ouvre/cible un onglet Teams et y attache la sidebar.
@@ -1417,7 +1505,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           // l'activation reprenne aussitôt sans attendre l'intervalle.
           await cancelAutoStart(); // évite un double déclenchement si une alarme traîne
           if (isRunning) pendingAutoStart = true;
-          else startScan('auto');
+          else await maybeStartAuto('auto'); // démarre maintenant si dans la plage, sinon planifie
         } else {
           pendingAutoStart = false;
           await cancelAutoStart();
