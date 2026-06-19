@@ -40,6 +40,43 @@
         </span>
         <input type="number" id="interval-min" min="1" max="240" step="1" value="5">
       </label>
+
+      <details class="advanced" id="advanced">
+        <summary>Paramètres avancés</summary>
+
+        <label class="switch-row" for="schedule-switch" style="margin-top:12px;">
+          <span class="switch-label">
+            Restreindre les horaires
+            <small>Le scan auto ne tourne que les jours et heures choisis</small>
+          </span>
+          <span class="switch">
+            <input type="checkbox" id="schedule-switch">
+            <span class="slider"></span>
+          </span>
+        </label>
+
+        <div id="schedule-fields" class="schedule-fields">
+          <div class="schedule-days" id="schedule-days">
+            <button type="button" class="day-chip" data-day="1">Lun</button>
+            <button type="button" class="day-chip" data-day="2">Mar</button>
+            <button type="button" class="day-chip" data-day="3">Mer</button>
+            <button type="button" class="day-chip" data-day="4">Jeu</button>
+            <button type="button" class="day-chip" data-day="5">Ven</button>
+            <button type="button" class="day-chip" data-day="6">Sam</button>
+            <button type="button" class="day-chip" data-day="0">Dim</button>
+          </div>
+
+          <div class="schedule-times">
+            <label for="schedule-start">De
+              <input type="time" id="schedule-start" value="08:00">
+            </label>
+            <label for="schedule-end">à
+              <input type="time" id="schedule-end" value="18:00">
+            </label>
+          </div>
+          <small class="schedule-hint" id="schedule-hint"></small>
+        </div>
+      </details>
     </div>
 
     <div id="status-container" class="status-container">

@@ -727,3 +727,23 @@
   .prompt-hub/version.md (0.2.18→0.2.19), releases.md.
 - Outcome : success.
 - Next : commit branche + merge main + push.
+
+## 2026-06-19 (23) — agent (Claude)
+
+- Action : V3 — Paramètres avancés pour planifier le scan automatique (jours +
+  plage horaire). UI : section <details> "Paramètres avancés" dans panel.html
+  (switch schedule, puces jours Lun→Dim data-day=getDay(), inputs time
+  début/fin, hint). panel.css : styles .advanced/.day-chip/.schedule-*.
+  panel.js : load/save (scheduleEnabled/scheduleDays/scheduleStart/scheduleEnd),
+  hint dynamique, état désactivé (.disabled). background.js : getSchedule()
+  + SCHEDULE_DEFAULTS, parseHM, isWithinSchedule (gère plage nocturne),
+  nextWindowStart, maybeStartAuto() qui gate tous les triggers auto
+  (onAlarm autoStart, onStartup, onInstalled, autoEnabledChanged, pendingAutoStart).
+  scheduleNextRun() saute à l'ouverture suivante si le tick tombe hors plage
+  (alarme en {when:target}). Scan manuel non affecté. Défaut OFF.
+- Fichiers : v3/panel.html, v3/panel.css, v3/panel.js, v3/background.js,
+  v3/manifest.json (3.0.18→3.0.19), .prompt-hub/version.md (0.2.19→0.3.0),
+  releases.md.
+- Validation : node --check bg + panel OK.
+- Outcome : success.
+- Next : commit branche feat/scan-schedule-window + merge main + push.
