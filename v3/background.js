@@ -1133,16 +1133,25 @@ async function extractBest(tabId, tabUrl, minScore) {
 // On tente donc l'extraction DIRECTE d'abord (sans cliquer, ce qui détruisait
 // l'iframe), puis en repli on ouvre l'onglet Récap + sous-onglet Transcript via
 // leurs data-tid stables (pas de match texte destructeur).
-async function tryExtractCurrent(tabId, tabUrl, gen) {
+// `forceTabs` : ignore le retour anticipé du chemin direct et passe TOUJOURS par
+// l'onglet Récap + sous-onglet Transcript. Le chemin direct peut capter un aperçu
+// horodaté PARTIEL du récap (peu d'entrées) sans jamais ouvrir le vrai onglet
+// Transcript ; on l'utilise donc pour escalader sur une nouvelle tentative quand la
+// précédente a produit un transcript trop court.
+async function tryExtractCurrent(tabId, tabUrl, gen, forceTabs = false) {
   // 0) réunion récurrente : positionner l'occurrence la plus récente AVANT
   // d'extraire (no-op si pas de sélecteur d'instance).
   let instance = await selectLatestInstanceAcrossFrames(tabId);
   if (instance && instance.opened) { await sleepCancellable(4000, gen); if (scanGen !== gen) return null; }
 
-  // 1) tentative directe (seuil élevé : un vrai transcript a un score important)
-  let r = await extractBest(tabId, tabUrl, 30);
-  if (r.transcript) { lastDiag = { path: 'direct', instance, bestScore: r.bestScore }; return r.transcript; }
-  if (scanGen !== gen) return null;
+  // 1) tentative directe (seuil élevé : un vrai transcript a un score important).
+  // Ignorée en mode escalade (`forceTabs`) car le direct a déjà donné un résultat
+  // trop court : on force l'ouverture du vrai onglet Transcript ci-dessous.
+  if (!forceTabs) {
+    let r = await extractBest(tabId, tabUrl, 30);
+    if (r.transcript) { lastDiag = { path: 'direct', instance, bestScore: r.bestScore }; return r.transcript; }
+    if (scanGen !== gen) return null;
+  }
 
   // 2) repli : onglet Récapitulatif (en dépliant le menu "+N" si le nom de réunion
   //    est long et masque l'onglet), puis sous-onglet Transcript (data-tid).
@@ -1160,9 +1169,9 @@ async function tryExtractCurrent(tabId, tabUrl, gen) {
     if (again && again.opened) { await sleepCancellable(4000, gen); if (scanGen !== gen) return null; }
   }
 
-  r = await extractBest(tabId, tabUrl, 8);
+  const r = await extractBest(tabId, tabUrl, 8);
   lastDiag = {
-    path: 'after-tabs',
+    path: forceTabs ? 'forced-tabs' : 'after-tabs',
     recapTab: !!(recap && recap.ok),
     recapVia: recap ? (recap.via || recap.reason || null) : null,
     transcriptTab: !!(tr && tr.ok),
@@ -1237,7 +1246,14 @@ async function startScan(reason = 'manual') {
       // Extraction avec sécurité de taille : un transcript dont le fichier fait
       // moins de MIN_TRANSCRIPT_BYTES est jugé incomplet (chargement raté) → on
       // ré-ouvre la discussion et on retente (jusqu'à 3 tentatives).
+      // On conserve le MEILLEUR (plus gros) transcript rencontré : une tentative
+      // ultérieure peut produire moins d'entrées (frame différente) et ne doit pas
+      // écraser un meilleur résultat déjà obtenu.
       let transcript = null, text = '', bytes = 0, attempts = 0;
+      // Escalade : la 1re tentative essaie le chemin direct ; dès qu'une tentative
+      // donne un transcript trop court, les suivantes FORCENT l'ouverture du vrai
+      // onglet Transcript (le direct ne capte parfois qu'un aperçu partiel du récap).
+      let forceTabs = false;
       for (let attempt = 1; attempt <= 3 && !aborted(); attempt++) {
         attempts = attempt;
         let clickRes;
@@ -1245,13 +1261,18 @@ async function startScan(reason = 'manual') {
         if (!clickRes || !clickRes.ok) break;
         await sleepCancellable(4000, myGen); // laisse le récap + l'iframe transcript se charger
         if (aborted()) return;
-        try { transcript = await tryExtractCurrent(tabId, TEAMS_URL, myGen); } catch (e) { transcript = null; }
+        let t = null;
+        try { t = await tryExtractCurrent(tabId, TEAMS_URL, myGen, forceTabs); } catch (e) { t = null; }
         if (aborted()) return;
-        if (!transcript) { text = ''; bytes = 0; continue; }
-        text = buildTxt(transcript);
-        bytes = txtByteLength(text);
+        if (t) {
+          const tText = buildTxt(t);
+          const tBytes = txtByteLength(tText);
+          if (tBytes > bytes) { transcript = t; text = tText; bytes = tBytes; }
+        }
         if (bytes >= MIN_TRANSCRIPT_BYTES) break; // OK
-        // Trop petit → on retente (sauf dernière tentative).
+        // Trop petit (ou rien) → escalade vers l'onglet Transcript et nouvelle
+        // tentative (sauf dernière tentative).
+        forceTabs = true;
         if (attempt < 3) await setState({ message: `Transcript incomplet, nouvelle tentative (${attempt + 1}/3) : ${label}` });
       }
 

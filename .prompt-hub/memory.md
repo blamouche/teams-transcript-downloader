@@ -764,3 +764,20 @@
 - Validation : YAML OK (ruby YAML.load_file). actionlint non installé.
 - Outcome : success.
 - Next : commit + push sur main (déclenchera la 1re release auto).
+
+## 2026-06-22 17:30 — agent (Claude Code)
+- Action : Fix V3 — transcript trop court signalé `error`. Réunion « DXD ISPARK
+  Spotlight 30 mn Focus RH » : 16 entrées / 3067 octets (< seuil 10 Ko), 3
+  tentatives identiques. Cause racine : `tryExtractCurrent` retour anticipé sur
+  chemin direct (aperçu récap partiel, score 132) → onglet Transcript jamais
+  ouvert ; retry rejouait le même direct. Confirmé via tab HTML fourni
+  (`data-tid="Transcript"`, observed `meeting-recap-transcript-tab`).
+- Fichiers : v3/background.js (param `forceTabs` + escalade/keep-best dans la
+  boucle de retry), v3/manifest.json (3.0.19→3.0.20), .prompt-hub/version.md
+  (0.3.1→0.3.2), releases.md, todo-20260622-172448-v3-transcript-escalate-retry.md.
+- Validation : `node --check v3/background.js` OK.
+- Statut : success.
+- Suite : observer un prochain run de debug ; si un transcript reste < 10 Ko
+  APRÈS forced-tabs, c'est une réunion réellement courte (faux positif du
+  garde-fou 10 Ko) — envisager un critère de complétude par stabilité du nombre
+  d'entrées plutôt qu'un seuil d'octets.

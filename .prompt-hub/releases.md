@@ -1,5 +1,23 @@
 # Releases
 
+## 0.3.2 — 2026-06-22
+
+- **Fix V3 — transcript trop court signalé en erreur (extraction directe
+  partielle).** Sur certaines réunions (ex. « DXD ISPARK "Spotlight" — 30 mn
+  Focus RH »), le scan terminait en `error` avec un transcript de ~3 Ko / 16
+  entrées (< seuil 10 Ko), répété à l'identique sur les 3 tentatives. Cause :
+  `tryExtractCurrent` retournait dès que le chemin **direct** trouvait un
+  résultat non vide ; or le récap expose un aperçu horodaté **partiel** (score
+  132, 16 entrées) qui satisfait ce chemin sans jamais ouvrir le vrai onglet
+  **Transcript** (`data-tid="Transcript"`, non sélectionné). La boucle de retry
+  rejouait le même chemin direct → toujours trop court → erreur.
+- Correctif : la boucle d'extraction **escalade** désormais. La 1re tentative
+  garde le chemin direct ; dès qu'une tentative produit un transcript trop court,
+  les suivantes **forcent** l'ouverture de l'onglet Récap + sous-onglet
+  Transcript (`forceTabs`) au lieu de répéter le direct. Le **meilleur** (plus
+  gros) transcript est conservé entre les tentatives. Nouveau `path` de diag :
+  `forced-tabs`. `manifest.json` v3 → `3.0.20`.
+
 ## 0.3.1 — 2026-06-19
 
 - **CI / Release automatique à chaque commit sur `main`**. Le workflow
