@@ -1,5 +1,22 @@
 # Releases
 
+## 0.3.3 — 2026-06-22
+
+- **Déduplication V3 basée sur la date/heure de la réunion** (en-tête du récap
+  `data-tid="intelligent-recap-header"`) au lieu de l'empreinte de contenu. La
+  clé « déjà traité » devient `t:<threadId>|<date réunion>`. Cette date est lue
+  via un nouveau `frameGetRecapDate` (premier `span[dir="auto"]` de l'en-tête
+  contenant une heure `HH:MM`, repli regex sur le texte de l'en-tête), cherché
+  dans toutes les frames (`getRecapDateAcrossFrames`). Pour les réunions
+  **récurrentes**, l'en-tête reflète l'occurrence positionnée dans la dropdown
+  (la plus récente), donc la date distingue correctement les occurrences ; pour
+  les réunions **simples**, on obtient enfin une date explicite au lieu d'une clé
+  vide. Replis conservés : thread seul puis empreinte de contenu si aucune date.
+- La date du récap alimente aussi le champ `when` du journal de run et le diag
+  (`lastDiag.recapDate`). `manifest.json` v3 → `3.0.21`.
+- Note : la clé de dédup change de forme → les réunions déjà téléchargées seront
+  re-téléchargées **une fois** (ré-indexation sous la nouvelle clé).
+
 ## 0.3.2 — 2026-06-22
 
 - **Fix V3 — transcript trop court signalé en erreur (extraction directe

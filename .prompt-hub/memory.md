@@ -781,3 +781,17 @@
   APRÈS forced-tabs, c'est une réunion réellement courte (faux positif du
   garde-fou 10 Ko) — envisager un critère de complétude par stabilité du nombre
   d'entrées plutôt qu'un seuil d'octets.
+
+## 2026-06-22 17:55 — agent (Claude Code)
+- Action : Déduplication V3 basée sur la date/heure de la réunion (en-tête récap
+  `data-tid="intelligent-recap-header"`) au lieu du hash de contenu. Demande
+  utilisateur. Ajout `frameGetRecapDate` (1er span[dir=auto] avec HH:MM, repli
+  regex), `getRecapDateAcrossFrames`. Capture `recapDate` dans lastDiag (chemins
+  direct + tabs). `dedupKey` → `t:<threadId>|<recapDate||instanceDate>`, replis
+  thread seul puis hash. `when` du journal et diag alimentés par recapDate.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.20→3.0.21),
+  .prompt-hub/version.md (0.3.2→0.3.3), releases.md.
+- Validation : node --check OK.
+- Statut : success.
+- Note : changement de forme de clé → 1 re-téléchargement unique des réunions
+  déjà traitées (ré-indexation). Récurrents : date = occurrence dropdown.

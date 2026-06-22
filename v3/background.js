@@ -581,6 +581,28 @@ function frameGetTitle() {
   return null;
 }
 
+// Lit la date/heure de la réunion affichée dans l'en-tête du récapitulatif
+// (data-tid="intelligent-recap-header"). Pour une réunion récurrente, cet en-tête
+// reflète l'OCCURRENCE sélectionnée dans la dropdown (positionnée au préalable sur
+// la plus récente), ce qui en fait un identifiant fiable et STABLE entre sessions
+// — contrairement à l'empreinte de contenu, qui varie selon l'extraction.
+// Le premier <span dir="auto"> de l'en-tête contient la date (ex.
+// « lundi 22 juin 2026 12:00 – 12:25 ») ; les spans suivants appartiennent à la
+// barre d'outils (Partager…). On valide par la présence d'une heure « HH:MM ».
+function frameGetRecapDate() {
+  const h = document.querySelector('[data-tid="intelligent-recap-header"]');
+  if (!h) return { found: false };
+  for (const span of h.querySelectorAll('span[dir="auto"]')) {
+    const txt = (span.textContent || '').trim();
+    if (txt && /\d{1,2}[:h]\d{2}/.test(txt)) return { found: true, date: txt };
+  }
+  // Repli : balayer le texte de l'en-tête pour une date avec heure.
+  const all = (h.textContent || '').trim();
+  const m = all.match(/.*?\d{1,2}[:h]\d{2}\s*[–-]\s*\d{1,2}[:h]\d{2}/);
+  if (m) return { found: true, date: m[0].trim() };
+  return { found: false };
+}
+
 function frameChats(action, arg, meetingsOnly) {
   function visible(el) {
     const r = el.getBoundingClientRect();
@@ -916,6 +938,20 @@ async function selectLatestInstanceAcrossFrames(tabId) {
   return { found: false };
 }
 
+// Cherche la date/heure de la réunion (en-tête du récap) dans toutes les frames.
+// Renvoie la chaîne de date, ou '' si l'en-tête n'est pas présent (récap non ouvert).
+async function getRecapDateAcrossFrames(tabId) {
+  let frames = [];
+  try { frames = await chrome.webNavigation.getAllFrames({ tabId }); } catch (e) { return ''; }
+  for (const frame of frames) {
+    try {
+      const res = await runInFrame(tabId, frame.frameId, frameGetRecapDate);
+      if (res && res.found && res.date) return res.date;
+    } catch (e) { /* frame non scriptable */ }
+  }
+  return '';
+}
+
 async function findTranscriptFrame(tabId) {
   const frames = await chrome.webNavigation.getAllFrames({ tabId });
   let bestFrame = null;
@@ -1079,14 +1115,20 @@ function meetingThreadId(chatItemId) {
   return m ? m[1] : '';
 }
 
-// Clé de déduplication : on privilégie l'ID de thread (stable) + la date d'instance
-// pour les réunions récurrentes ; repli sur l'empreinte de contenu si l'ID est absent.
+// Clé de déduplication : identité = thread Teams (stable) + DATE/HEURE de la réunion
+// lue dans l'en-tête du récap (data-tid="intelligent-recap-header"). Cette date
+// distingue les occurrences d'une réunion récurrente ET donne une identité fiable aux
+// réunions simples (l'empreinte de contenu, elle, varie d'un scan à l'autre).
+// Ordre de préférence pour la date : en-tête récap → instance sélectionnée (dropdown).
+// Replis si aucune date n'est disponible : thread seul, sinon empreinte de contenu.
 function dedupKey(chatItemId, transcript) {
   const tid = meetingThreadId(chatItemId);
-  if (!tid) return transcriptKey(transcript);
   const inst = (lastDiag && lastDiag.instance) ? lastDiag.instance : null;
-  const instanceKey = inst ? normMsg(inst.selected || inst.current || '') : '';
-  return 't:' + tid + '|' + instanceKey;
+  const recapDate = (lastDiag && lastDiag.recapDate) || '';
+  const dateKey = normMsg(recapDate || (inst ? (inst.selected || inst.current || '') : ''));
+  if (tid) return 't:' + tid + '|' + dateKey;
+  if (dateKey) return 'd:' + dateKey;
+  return transcriptKey(transcript);
 }
 
 async function getProcessed() {
@@ -1149,7 +1191,11 @@ async function tryExtractCurrent(tabId, tabUrl, gen, forceTabs = false) {
   // trop court : on force l'ouverture du vrai onglet Transcript ci-dessous.
   if (!forceTabs) {
     let r = await extractBest(tabId, tabUrl, 30);
-    if (r.transcript) { lastDiag = { path: 'direct', instance, bestScore: r.bestScore }; return r.transcript; }
+    if (r.transcript) {
+      const recapDate = await getRecapDateAcrossFrames(tabId);
+      lastDiag = { path: 'direct', instance, recapDate, bestScore: r.bestScore };
+      return r.transcript;
+    }
     if (scanGen !== gen) return null;
   }
 
@@ -1169,9 +1215,11 @@ async function tryExtractCurrent(tabId, tabUrl, gen, forceTabs = false) {
     if (again && again.opened) { await sleepCancellable(4000, gen); if (scanGen !== gen) return null; }
   }
 
+  const recapDate = await getRecapDateAcrossFrames(tabId);
   const r = await extractBest(tabId, tabUrl, 8);
   lastDiag = {
     path: forceTabs ? 'forced-tabs' : 'after-tabs',
+    recapDate,
     recapTab: !!(recap && recap.ok),
     recapVia: recap ? (recap.via || recap.reason || null) : null,
     transcriptTab: !!(tr && tr.ok),
@@ -1276,7 +1324,9 @@ async function startScan(reason = 'manual') {
         if (attempt < 3) await setState({ message: `Transcript incomplet, nouvelle tentative (${attempt + 1}/3) : ${label}` });
       }
 
-      const when = (lastDiag && lastDiag.instance && (lastDiag.instance.selected || lastDiag.instance.current)) || items[i].when || '';
+      const when = (lastDiag && lastDiag.recapDate)
+        || (lastDiag && lastDiag.instance && (lastDiag.instance.selected || lastDiag.instance.current))
+        || items[i].when || '';
       const diagSnapshot = lastDiag ? JSON.parse(JSON.stringify(lastDiag)) : null;
       const dbg = { attempts, bytes, entries: transcript ? transcript.entries.length : 0, chatId: items[i].id, title: transcript ? transcript.title : null, diag: diagSnapshot };
 
