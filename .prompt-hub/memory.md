@@ -795,3 +795,18 @@
 - Statut : success.
 - Note : changement de forme de clé → 1 re-téléchargement unique des réunions
   déjà traitées (ré-indexation). Récurrents : date = occurrence dropdown.
+
+## 2026-06-22 18:15 — agent (Claude Code)
+- Action : Fix dédup V3 — re-téléchargements en boucle (capture d'écran : FF#2,
+  Bi-weekly, Sprint Review re-téléchargés entre run 17:33 et 17:42). Cause : clé
+  date-récap instable — (1) en-tête récap rendu async → lu vide un run, plein le
+  suivant ; (2) date brute variait en espaces/format. Fix : (a)
+  `getRecapDateAcrossFrames` sonde l'en-tête jusqu'à ~5,6 s ; (b)
+  `canonicalMeetingDate` canonise la date FR en AAAA-MM-JJ-HHMM avant la clé.
+- Fichiers : v3/background.js, v3/manifest.json (3.0.21→3.0.22), version.md
+  (0.3.3→0.3.4), releases.md.
+- Validation : node --check OK ; test parser (espaces simples/doubles → même clé).
+- Statut : success.
+- Note : encore 1 re-download unique (forme de clé change) puis stabilité.
+- Leçon : keyer une dédup sur une lecture DOM async impose de SONDER jusqu'à
+  présence + de CANONISER la valeur, sinon la clé varie d'un run à l'autre.

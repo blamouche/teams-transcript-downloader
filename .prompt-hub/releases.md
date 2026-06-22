@@ -1,5 +1,23 @@
 # Releases
 
+## 0.3.4 — 2026-06-22
+
+- **Fix dédup V3 — re-téléchargements en boucle.** La clé basée sur la date du
+  récap (0.3.3) restait instable d'un run à l'autre pour deux raisons : (1)
+  l'en-tête du récap est rendu de façon **asynchrone**, donc parfois lu vide
+  (clé `t:tid|`) puis plein au scan suivant (clé `t:tid|<date>`) → re-download ;
+  (2) la date brute variait en **espaces/format** (« 12:00 –  12:25 » vs
+  « 12:00 – 12:25 »).
+- Correctifs :
+  - `getRecapDateAcrossFrames` **sonde** désormais l'en-tête (jusqu'à ~5,6 s) au
+    lieu d'une seule lecture → date présente de façon fiable et donc identique à
+    chaque run.
+  - Nouvelle `canonicalMeetingDate` : la date FR est **canonisée** en
+    `AAAA-MM-JJ-HHMM` (date + heure de début) avant d'entrer dans la clé →
+    insensible aux espaces/format/locale. Repli texte normalisé si parsing KO.
+- `manifest.json` v3 → `3.0.22`. Note : la forme de clé change encore une fois
+  → un dernier re-téléchargement unique par réunion, puis stabilité.
+
 ## 0.3.3 — 2026-06-22
 
 - **Déduplication V3 basée sur la date/heure de la réunion** (en-tête du récap

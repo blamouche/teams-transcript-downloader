@@ -939,15 +939,21 @@ async function selectLatestInstanceAcrossFrames(tabId) {
 }
 
 // Cherche la date/heure de la réunion (en-tête du récap) dans toutes les frames.
-// Renvoie la chaîne de date, ou '' si l'en-tête n'est pas présent (récap non ouvert).
-async function getRecapDateAcrossFrames(tabId) {
-  let frames = [];
-  try { frames = await chrome.webNavigation.getAllFrames({ tabId }); } catch (e) { return ''; }
-  for (const frame of frames) {
-    try {
-      const res = await runInFrame(tabId, frame.frameId, frameGetRecapDate);
-      if (res && res.found && res.date) return res.date;
-    } catch (e) { /* frame non scriptable */ }
+// L'en-tête est rendu de façon ASYNCHRONE après ouverture de la réunion : si on lit
+// trop tôt on obtient '' alors qu'au scan suivant on l'obtient → la clé de dédup
+// changerait d'un run à l'autre (re-téléchargement). On SONDE donc jusqu'à ce que
+// l'en-tête apparaisse (la stabilité de cette lecture est la condition de la dédup).
+async function getRecapDateAcrossFrames(tabId, tries = 8, delayMs = 700) {
+  for (let attempt = 0; attempt < tries; attempt++) {
+    let frames = [];
+    try { frames = await chrome.webNavigation.getAllFrames({ tabId }); } catch (e) { return ''; }
+    for (const frame of frames) {
+      try {
+        const res = await runInFrame(tabId, frame.frameId, frameGetRecapDate);
+        if (res && res.found && res.date) return res.date;
+      } catch (e) { /* frame non scriptable */ }
+    }
+    if (attempt < tries - 1) await sleep(delayMs);
   }
   return '';
 }
@@ -1115,17 +1121,38 @@ function meetingThreadId(chatItemId) {
   return m ? m[1] : '';
 }
 
+// Canonise une date FR de réunion (« lundi 22 juin 2026 12:00 – 12:25 ») en une clé
+// STABLE et insensible au rendu : « 2026-06-22-1200 » (date + heure de DÉBUT). Ainsi
+// les variations d'espaces/format/locale n'altèrent pas la clé de dédup. Repli sur le
+// texte normalisé si le parsing échoue (langue/format inattendu).
+function canonicalMeetingDate(s) {
+  const raw = (s || '').toLowerCase();
+  if (!raw) return '';
+  const months = {
+    janvier: '01', février: '02', fevrier: '02', mars: '03', avril: '04', mai: '05',
+    juin: '06', juillet: '07', août: '08', aout: '08', septembre: '09', octobre: '10',
+    novembre: '11', décembre: '12', decembre: '12'
+  };
+  const m = raw.match(/(\d{1,2})\s+([a-zàâäéèêëïîôöùûüç]+)\s+(\d{4})\D+(\d{1,2})[:h](\d{2})/);
+  if (m && months[m[2]]) {
+    const day = m[1].padStart(2, '0');
+    const hh = m[4].padStart(2, '0');
+    return `${m[3]}-${months[m[2]]}-${day}-${hh}${m[5]}`;
+  }
+  return normMsg(raw);
+}
+
 // Clé de déduplication : identité = thread Teams (stable) + DATE/HEURE de la réunion
-// lue dans l'en-tête du récap (data-tid="intelligent-recap-header"). Cette date
-// distingue les occurrences d'une réunion récurrente ET donne une identité fiable aux
-// réunions simples (l'empreinte de contenu, elle, varie d'un scan à l'autre).
+// lue dans l'en-tête du récap (data-tid="intelligent-recap-header"), canonisée. Cette
+// date distingue les occurrences d'une réunion récurrente ET donne une identité fiable
+// aux réunions simples (l'empreinte de contenu, elle, varie d'un scan à l'autre).
 // Ordre de préférence pour la date : en-tête récap → instance sélectionnée (dropdown).
 // Replis si aucune date n'est disponible : thread seul, sinon empreinte de contenu.
 function dedupKey(chatItemId, transcript) {
   const tid = meetingThreadId(chatItemId);
   const inst = (lastDiag && lastDiag.instance) ? lastDiag.instance : null;
   const recapDate = (lastDiag && lastDiag.recapDate) || '';
-  const dateKey = normMsg(recapDate || (inst ? (inst.selected || inst.current || '') : ''));
+  const dateKey = canonicalMeetingDate(recapDate || (inst ? (inst.selected || inst.current || '') : ''));
   if (tid) return 't:' + tid + '|' + dateKey;
   if (dateKey) return 'd:' + dateKey;
   return transcriptKey(transcript);
