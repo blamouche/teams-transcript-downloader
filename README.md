@@ -45,35 +45,6 @@ Historiquement, V2 est un sur-ensemble de V1, et **V3 un sur-ensemble de V2**.
 
 La version web de Microsoft Teams affiche les transcripts de réunions mais n'offre pas de bouton de téléchargement natif. Cette extension scanne automatiquement la page et ses iframes (notamment celles de la vue *Recap*), extrait chaque ligne du transcript (heure, orateur, message) puis propose un export en JSON structuré ou en TXT lisible.
 
-### V2 — automatisation en arrière-plan
-
-La V2 déporte toute l'orchestration dans un **service worker** ([`background.js`](v2/background.js)). Conséquences :
-
-- le traitement **continue même popup fermée** ;
-- l'onglet Teams ciblé **n'a pas besoin d'être actif/visible** (`chrome.scripting.executeScript` cible un `tabId` précis), on peut travailler sur d'autres onglets en parallèle ;
-- un **onglet Teams dédié** est ouvert automatiquement (non actif) si aucun n'existe ;
-- l'**Automatisation est OFF par défaut** (rien ne se lance à l'installation) ; une fois activée, le scan démarre **immédiatement**, puis **se relance en boucle** avec une **pause paramétrable entre deux scans** (défaut **5 min**, via `chrome.alarms`) et un **compte à rebours** dans la popup ; il redémarre aussi au lancement du navigateur ;
-- le scan peut être **arrêté manuellement** en cours (bouton **Arrêter**) ;
-- le nombre de discussions scannées est **paramétrable** (les N premières, défaut **50**, `0` = toutes) ;
-- des **Paramètres avancés** permettent de **restreindre le scan automatique** à des **jours** (Lun→Dim) et une **plage horaire** (heure de début/fin) ; hors plage l'automatisation reste active mais ne scanne pas et **planifie le prochain scan à l'ouverture de la prochaine fenêtre** (le scan manuel reste toujours disponible ; OFF par défaut) ;
-- option **« Réunions uniquement »** (activée par défaut) : ne scanne que les chats de réunion, en s'appuyant sur l'icône d'avatar générique (`span.fui-Avatar__icon` sans `[data-tid="PersonaAvatar"]`), et ignore les chats individuels (avatar + badge de présence) et de groupe (photo).
-
-Déroulé du scan, pour chaque discussion du bloc **Discussions** :
-
-1. dépliage de « Voir plus » pour charger les discussions masquées ;
-2. sélection des discussions = treeitems feuilles **avec `id` + avatar** (hors navigation et hors canaux d'équipe) ;
-3. ouverture de la discussion **par son `id`** (`getElementById`) ;
-4. tentative d'ouverture du **récapitulatif** puis de l'onglet **Transcript** (skip rapide si aucun) ;
-5. si un transcript est détecté, extraction (moteur V1) puis téléchargement direct du `.txt` dans le dossier Téléchargements.
-
-Retours visuels : un **loader** (spinner) s'affiche dans la popup pendant le scan, l'icône de l'extension est dessinée à la volée (document « transcript » sur fond violet), et une **pastille de statut** apparaît dessus (● violet = scan en cours, ● vert = automatisation active, ■ rouge = arrêté, rien = désactivée).
-
-Les transcripts déjà traités ne sont **pas re-téléchargés** : une signature de contenu (`titre|nb entrées|hash du texte`, stable entre cycles et sessions) est mémorisée dans `chrome.storage.local` (`processedKeys`) et vérifiée avant chaque téléchargement. Le bilan de fin indique « X nouveau(x), Y déjà traité(s) », et le bouton **« Réinitialiser l'historique »** vide cette mémoire. La popup affiche l'état/progression en direct (lu dans `chrome.storage.local`, clé `scanState`).
-
-> Note technique : le service worker n'ayant pas de DOM, le téléchargement se fait via une **`data:` URL** (et non `URL.createObjectURL`).
-
-Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur le panneau Transcript déjà ouvert de l'onglet actif (repli).
-
 ## Installation
 
 ### Installer la V3 dans Chrome (recommandé)
