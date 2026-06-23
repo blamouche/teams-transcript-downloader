@@ -1,5 +1,20 @@
 # Releases
 
+## 0.3.7 — 2026-06-23
+
+- **Fix V3 — extraction incomplète : défilement trop rapide.** Le moteur
+  (`frameFullExtract`, partagé par le scan auto ET l'extraction manuelle) sautait
+  d'un coup sur la **dernière cellule rendue** (`scrollIntoView` sur le dernier
+  nœud). Sur une liste **virtualisée**, ce saut pouvait dépasser plusieurs écrans
+  d'un coup : les cellules intermédiaires étaient recyclées hors du DOM **avant**
+  d'être collectées → lignes manquantes.
+- Nouveau défilement par **paliers courts et chevauchants** (~50 % de la hauteur
+  visible, ~900 ms de pause par palier) : chaque palier recouvre le précédent,
+  aucune cellule n'est sautée, et le composant a le temps de rendre les nouvelles
+  cellules avant collecte. Arrêt seulement **en bas** + plus aucune nouvelle
+  entrée ; ré-ancrage sur la dernière cellule réelle en cas de « décrochage ».
+- `manifest.json` v3 → `3.0.24`.
+
 ## 0.3.6 — 2026-06-23
 
 - **Fix V3 — le voile gris ne s'affiche plus hors scan.** Le voile bloquant

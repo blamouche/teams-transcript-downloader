@@ -1,5 +1,15 @@
 # Memory
 
+## 2026-06-23 — agent (Claude) — extraction V3 défilement chevauchant
+
+- Action : Corrigé l'extraction incomplète (scroll trop rapide). `frameFullExtract`
+  ne saute plus sur la dernière cellule rendue (overshoot → cellules virtualisées
+  recyclées avant collecte). Désormais paliers ~50 % du viewport, pause ~900 ms,
+  arrêt seulement en bas + stable, ré-ancrage sur dernière cellule si décrochage.
+  Partagé par scan auto + extraction manuelle. `v3/manifest.json` → 3.0.24.
+- Fichiers : `v3/background.js`, `v3/manifest.json`, `.prompt-hub/{version,releases,memory}.md`.
+- Outcome : success.
+
 ## 2026-06-23 — agent (Claude) — voile V3 lié au scan
 
 - Action : Le voile gris V3 ne doit s'afficher que pendant un scan en cours.

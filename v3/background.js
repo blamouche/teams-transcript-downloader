@@ -531,44 +531,56 @@ function frameFullExtract() {
 
     // On part du haut pour tout balayer dans l'ordre.
     try { scroller.scrollTop = 0; } catch (e) { /* ignore */ }
-    await sleep(600);
+    await sleep(800);
     collect();
 
-    // Défilement par paliers. La liste est VIRTUALISÉE : piloter `scrollTop` en
-    // absolu est fragile car le composant recalcule sa hauteur quand de nouvelles
-    // cellules se chargent et remet alors `scrollTop` à 0 (« décrochage » → on
-    // repart du haut en boucle). On ancre donc le défilement sur la DERNIÈRE
-    // cellule rendue via `scrollIntoView` : on vise un nœud réel, c'est
-    // auto-correctif (si le framework saute en haut, on re-descend vers elle).
-    // Critère d'arrêt : plus aucune nouvelle entrée après plusieurs paliers.
     function lastCell() {
       let cells = container.querySelectorAll('[data-automationid="ListCell"], [role="listitem"]');
       if (!cells.length) cells = container.children;
       return cells.length ? cells[cells.length - 1] : null;
     }
 
+    // Défilement par paliers COURTS et CHEVAUCHANTS. La liste est VIRTUALISÉE :
+    // les cellules hors écran sont retirées du DOM. Si on saute trop loin d'un
+    // coup (ex. directement sur la dernière cellule rendue), les cellules
+    // intermédiaires sont recyclées AVANT d'être collectées → contenu manquant.
+    // On avance donc d'un demi-écran à la fois (chaque palier recouvre le
+    // précédent : aucune cellule n'est sautée) et on laisse le temps au composant
+    // de rendre les nouvelles cellules avant de collecter.
     let stable = 0;
     let lastCount = -1;
-    for (let i = 0; i < 400; i++) {
+    for (let i = 0; i < 1200; i++) {
       // Arrêt demandé depuis le service worker : on stoppe le défilement immédiatement.
       try { if (window.__ttdAbort) break; } catch (e) { /* ignore */ }
       collect();
       if (allEntries.length === lastCount) stable++;
       else { stable = 0; lastCount = allEntries.length; }
-      if (stable >= 8) break; // plus de nouvelles entrées : on a tout balayé
 
-      const last = lastCell();
-      if (last && last.scrollIntoView) {
-        try { last.scrollIntoView({ block: 'end' }); } catch (e) { /* ignore */ }
-      } else {
-        // repli si aucune cellule ciblable : poussée relative classique
-        const step = Math.max(200, Math.floor(scroller.clientHeight * 0.8));
-        scroller.scrollTop = Math.min(scroller.scrollHeight, scroller.scrollTop + step);
+      // Vraiment terminé seulement si on est EN BAS et que plus rien n'apparaît.
+      const atBottom = scroller.scrollTop + scroller.clientHeight >= scroller.scrollHeight - 4;
+      if (atBottom && stable >= 5) break;
+      if (stable >= 25) break; // garde-fou absolu (liste figée)
+
+      const prevTop = scroller.scrollTop;
+      const step = Math.max(120, Math.floor(scroller.clientHeight * 0.5)); // ~50 % → chevauchement
+      scroller.scrollTop = Math.min(scroller.scrollHeight, prevTop + step);
+      await sleep(900); // laisse la liste virtualisée rendre les nouvelles cellules
+
+      // « Décrochage » : le composant a recalculé sa hauteur et renvoyé scrollTop
+      // en haut (ou n'a pas bougé). On se ré-ancre sur la dernière cellule réelle
+      // rendue (nœud réel → auto-correctif) puis on laisse de nouveau le temps de rendu.
+      if (scroller.scrollTop <= prevTop) {
+        const last = lastCell();
+        if (last && last.scrollIntoView) {
+          try { last.scrollIntoView({ block: 'end' }); } catch (e) { /* ignore */ }
+          await sleep(900);
+        }
       }
-      await sleep(600);
     }
 
     // Passe finale tout en bas.
+    try { scroller.scrollTop = scroller.scrollHeight; } catch (e) { /* ignore */ }
+    await sleep(700);
     collect();
     return { found: allEntries.length > 0, entries: allEntries, scrolled: true };
   })();
