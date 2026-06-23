@@ -1,5 +1,14 @@
 # Releases
 
+## 0.3.5 — 2026-06-23
+
+- **Doc — README recentré sur la V3.** La V3 devient la version recommandée et
+  documentée en premier ; **V1 et V2 sont marquées dépréciées** (conservées pour
+  référence). Nouvelle section d'installation Chrome pas-à-pas avec **lien de
+  téléchargement direct** vers `releases/latest` (asset `…-v3-….zip`) et note de
+  mise à jour. La section Utilisation est menée par la V3 ; les modes V1/V2 sont
+  repliés dans un bloc dépliable. Changement documentaire uniquement (aucun code).
+
 ## 0.3.4 — 2026-06-22
 
 - **Fix dédup V3 — re-téléchargements en boucle.** La clé basée sur la date du

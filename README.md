@@ -2,17 +2,44 @@
 
 Extension Chrome (Manifest V3) pour télécharger les transcripts de réunions Microsoft Teams (y compris via l'interface **Recap**) au format JSON ou TXT.
 
-## Trois versions
+> **👉 Utilisez la V3.** C'est la version recommandée et activement maintenue.
+> Les versions **V1 et V2 sont _dépréciées_** : conservées dans le dépôt pour
+> référence historique, elles ne reçoivent plus d'évolutions. Voir
+> [Installation](#installation) pour le lien de téléchargement direct.
 
-Le dépôt fournit **trois versions** complètes de l'extension, dans trois dossiers distincts. On charge l'une ou l'autre dans Chrome selon l'usage souhaité.
+## V3 — la version recommandée
 
-| Version | Dossier | Fonctionnement |
-|---|---|---|
-| **V1** | [`v1/`](v1/) | Extraction **manuelle** : on ouvre soi-même le panneau Transcript dans Teams, puis on clique sur *Extraire*. |
-| **V2** | [`v2/`](v2/) | Tout V1 **+ automatisation en arrière-plan** (service worker) : scan des N premières discussions (paramétrable), **même popup fermée** et **sans que l'onglet Teams soit actif**, avec ouverture auto d'un onglet Teams dédié, démarrage automatique après activation, et arrêt manuel. |
-| **V3** | [`v3/`](v3/) | Identique à V2 sur le fond, mais l'UI est un **panneau latéral attaché à l'onglet Teams** (`chrome.sidePanel`, comportement type extension Claude). Le clic sur l'icône **ouvre (ou cible) un onglet Teams dédié** et y attache le panneau ; celui-ci **disparaît dès qu'on change d'onglet** (activé sur les onglets Teams, désactivé ailleurs). Quand l'**automatisation est ON**, l'onglet Teams piloté est recouvert d'un **voile gris semi-transparent** (on voit le travail mais l'utilisateur ne peut pas cliquer par erreur) ; **automatisation OFF**, le voile est retiré pour pouvoir naviguer dans Teams manuellement. À la création de l'onglet, un guide invite à recliquer sur l'icône pour ouvrir le panneau. |
+La **V3** ([`v3/`](v3/)) est l'aboutissement du projet. Elle automatise entièrement
+la récupération des transcripts depuis un **panneau latéral attaché à l'onglet
+Teams** (`chrome.sidePanel`, comportement type extension Claude) :
 
-La V1 reste strictement inchangée. V2 est un sur-ensemble de V1, V3 un sur-ensemble de V2.
+- le clic sur l'icône **ouvre (ou cible) un onglet Teams dédié** et y attache le
+  panneau ; celui-ci **disparaît dès qu'on change d'onglet** (actif sur les
+  onglets Teams, masqué ailleurs) ;
+- l'**automatisation en arrière-plan** (service worker) scanne les N premières
+  discussions **même panneau fermé** et **sans que l'onglet Teams soit actif** ;
+- quand l'**automatisation est ON**, l'onglet Teams piloté est recouvert d'un
+  **voile gris semi-transparent** : on voit le travail en cours mais on ne peut
+  pas cliquer par erreur ; **automatisation OFF**, le voile est retiré pour
+  naviguer dans Teams manuellement ;
+- déduplication robuste des transcripts déjà téléchargés (clé basée sur la
+  date/heure de la réunion) et **paramètres avancés** (jours + plage horaire de
+  scan, « Réunions uniquement », nombre de discussions, pause entre scans).
+
+Le détail du fonctionnement (orchestration, moteur d'extraction, déduplication)
+est décrit dans [Architecture technique](#architecture-technique).
+
+## Versions dépréciées (V1 & V2)
+
+> ⚠️ **Dépréciées — ne plus utiliser pour un nouvel usage.** Maintenues à titre
+> de référence uniquement ; aucune évolution n'est prévue. Préférez la V3.
+
+| Version | Dossier | Statut | Fonctionnement |
+|---|---|---|---|
+| **V1** | [`v1/`](v1/) | _Dépréciée_ | Extraction **manuelle** : on ouvre soi-même le panneau Transcript dans Teams, puis on clique sur *Extraire*. |
+| **V2** | [`v2/`](v2/) | _Dépréciée_ | Tout V1 **+ automatisation en arrière-plan** (service worker), pilotée depuis une **popup** (et non un panneau latéral). |
+
+Historiquement, V2 est un sur-ensemble de V1, et **V3 un sur-ensemble de V2**.
 
 ## Description
 
@@ -49,28 +76,40 @@ Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur
 
 ## Installation
 
-### Depuis une release GitHub (recommandé)
+### Installer la V3 dans Chrome (recommandé)
 
-1. Rendez-vous sur la page des releases :
-   [github.com/blamouche/teams-transcript-downloader/releases](https://github.com/blamouche/teams-transcript-downloader/releases).
-2. Téléchargez l'archive souhaitée de la dernière release :
-   `teams-transcript-downloader-v1-vX.Y.Z.zip` (manuelle) ou
-   `teams-transcript-downloader-v2-vX.Y.Z.zip` (automatique).
-3. Décompressez l'archive dans un dossier de votre choix.
-4. Ouvrez Chrome à l'adresse `chrome://extensions/`.
-5. Activez le **Mode développeur** (toggle en haut à droite).
-6. Cliquez sur **« Charger l'extension non empaquetée »** et sélectionnez le
-   dossier décompressé.
+L'extension n'est pas (encore) sur le Chrome Web Store : on l'installe en mode
+développeur à partir du zip de release. Comptez moins d'une minute.
 
-### Mode développeur (depuis les sources)
+1. **Téléchargez la dernière release V3** — lien direct :
+   **[⬇️ Télécharger la dernière release V3 (zip)](https://github.com/blamouche/teams-transcript-downloader/releases/latest)**
+   → sur la page qui s'ouvre, prenez l'asset
+   **`teams-transcript-downloader-v3-<version>.zip`** (le fichier `…-v3-…`).
+   _Cette page pointe toujours vers la version la plus récente._
+2. **Décompressez** l'archive dans un dossier permanent de votre choix
+   (ex. `Documents/teams-transcript-downloader-v3`). ⚠️ Ne supprimez pas ce
+   dossier après installation : Chrome charge l'extension depuis cet emplacement.
+3. Ouvrez Chrome à l'adresse **`chrome://extensions/`**.
+4. Activez le **Mode développeur** (toggle en haut à droite).
+5. Cliquez sur **« Charger l'extension non empaquetée »** puis sélectionnez le
+   dossier décompressé (celui qui contient `manifest.json`).
+6. L'icône apparaît dans la barre d'outils. **Épinglez-la** (icône puzzle →
+   punaise) pour un accès rapide, puis cliquez dessus : un onglet Teams dédié
+   s'ouvre et le panneau latéral s'attache (recliquez sur l'icône si invité à le
+   faire).
+
+> 💡 **Mise à jour** : retéléchargez le zip de la dernière release, remplacez le
+> contenu du dossier, puis cliquez sur *Recharger* sous l'extension dans
+> `chrome://extensions/`.
+
+### Installer depuis les sources (développement)
 
 1. Clonez ce dépôt.
 2. Ouvrez Chrome à l'adresse `chrome://extensions/`.
 3. Activez le **Mode développeur** (toggle en haut à droite).
-4. Cliquez sur **« Charger l'extension non empaquetée »**.
-5. Sélectionnez le dossier **`v1/`** (manuelle), **`v2/`** (automatique, popup)
-   ou **`v3/`** (automatique, panneau latéral + voile sur l'onglet dédié) selon la
-   version voulue.
+4. Cliquez sur **« Charger l'extension non empaquetée »** et sélectionnez le
+   dossier **`v3/`** (recommandé). Les dossiers `v1/` et `v2/` restent
+   chargeables mais sont _dépréciés_.
 
 ### Chrome Web Store
 
@@ -78,7 +117,30 @@ Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur
 
 ## Utilisation
 
-**V1 (manuelle)**
+### V3 (recommandée — panneau latéral + automatisation)
+
+1. Cliquez sur l'icône de l'extension : un **onglet Teams dédié** s'ouvre et le
+   **panneau latéral** s'y attache (recliquez sur l'icône si le guide vous y
+   invite).
+2. Réglez le **nombre de discussions** à scanner (défaut 50, `0` = toutes) et,
+   au besoin, les **Paramètres avancés** (jours + plage horaire, « Réunions
+   uniquement »).
+3. Activez **Automatisation** : le scan démarre **immédiatement**, puis se
+   relance en boucle (pause paramétrable, défaut 5 min, avec compte à rebours).
+   Pendant le travail, l'onglet Teams est recouvert d'un **voile gris** ; il
+   disparaît dès que vous coupez l'automatisation.
+4. Vous pouvez **changer d'onglet / fermer le panneau** : le scan continue en
+   arrière-plan. Le `.txt` de chaque réunion contenant un transcript est
+   téléchargé dans *Téléchargements*. Les réunions déjà traitées ne sont **pas
+   re-téléchargées**.
+5. **Arrêter** interrompt le scan en cours. En cas d'échec ponctuel, ouvrez
+   vous-même le panneau Transcript dans Teams et utilisez **« Extraire
+   manuellement »**.
+
+<details>
+<summary><strong>Versions dépréciées (V1 &amp; V2) — pour mémoire</strong></summary>
+
+**V1 (manuelle, _dépréciée_)**
 
 1. Ouvrez Microsoft Teams (`teams.microsoft.com` ou `teams.cloud.microsoft`) dans Chrome.
 2. Accédez à la réunion et affichez le transcript (vue *Recap* ou panneau Transcript).
@@ -86,7 +148,7 @@ Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur
 4. Cliquez sur **« Extraire le transcript »** — l'extension scanne automatiquement les iframes et choisit celle qui contient le transcript.
 5. Vérifiez l'aperçu, puis téléchargez au format **JSON** ou **TXT**.
 
-**V2 (automatique, en arrière-plan)**
+**V2 (automatique, popup, _dépréciée_)**
 
 1. Cliquez sur l'icône de l'extension (inutile d'avoir Teams au premier plan).
 2. Réglez le **nombre de discussions** à scanner (défaut 50, `0` = toutes).
@@ -95,6 +157,8 @@ Le bouton **« Extraire manuellement »** reproduit le comportement de la V1 sur
    - **« Scanner maintenant »** → un scan unique immédiat.
 4. Un onglet Teams dédié s'ouvre en arrière-plan si besoin ; vous pouvez **fermer la popup** et continuer à travailler sur vos autres onglets. Le `.txt` de chaque discussion contenant un transcript est téléchargé dans Téléchargements.
 5. **Arrêter** interrompt le scan en cours. En cas d'échec, ouvrez vous-même le panneau Transcript et utilisez **« Extraire manuellement »**.
+
+</details>
 
 ## Architecture technique
 

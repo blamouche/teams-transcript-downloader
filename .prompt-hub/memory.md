@@ -1,5 +1,16 @@
 # Memory
 
+## 2026-06-23 — agent (Claude)
+
+- Action : Réécriture du `README.md` centrée sur la **V3** (version recommandée),
+  V1 & V2 marquées **dépréciées**. Nouvelle section Installation Chrome pas-à-pas
+  avec **lien de téléchargement direct** vers `releases/latest` (asset
+  `…-v3-….zip`) + note de mise à jour. Section Utilisation menée par la V3, V1/V2
+  repliées dans un `<details>`.
+- Fichiers modifiés : `README.md`, `.prompt-hub/memory.md`.
+- Outcome : success.
+- Next : commit `docs: focus README on V3, mark V1/V2 deprecated, add direct release download` puis push (en attente de validation utilisateur).
+
 ## 2026-04-17 09:30 — agent (Claude)
 
 - Action : Initialisation du workflow prompt-hub et mise à jour du `README.md` avec la documentation technique.
