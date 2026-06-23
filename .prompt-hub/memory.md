@@ -1,5 +1,16 @@
 # Memory
 
+## 2026-06-23 — agent (Claude) — voile V3 lié au scan
+
+- Action : Le voile gris V3 ne doit s'afficher que pendant un scan en cours.
+  `refreshOverlay` keyé sur `isRunning` (au lieu de `autoEnabled`) ; `startScan`
+  applique le voile au début et le retire dans le `finally` ; handler `onUpdated`
+  et `stop` alignés. Badge « Scan en cours ». `v3/manifest.json` → 3.0.23.
+- Fichiers modifiés : `v3/background.js`, `v3/manifest.json`,
+  `.prompt-hub/{version,releases,memory}.md`.
+- Outcome : success.
+- Next : commit + push.
+
 ## 2026-06-23 — agent (Claude)
 
 - Action : Réécriture du `README.md` centrée sur la **V3** (version recommandée),

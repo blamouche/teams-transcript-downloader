@@ -245,7 +245,7 @@ async function updateActionUI(state) {
 //   PAS interceptées par ce voile.
 // ============================================================
 
-// --- Voile BLOQUANT (gris) : actif uniquement quand l'automatisation est ON ---
+// --- Voile BLOQUANT (gris) : actif uniquement pendant qu'un scan est EN COURS ---
 // Injecté dans la page (frame 0), idempotent. Un MutationObserver le réinsère si la
 // SPA Teams le retire lors d'un re-render. Bloque clic/clavier/scroll de l'utilisateur.
 function pageApplyOverlay() {
@@ -258,7 +258,7 @@ function pageApplyOverlay() {
   const block = (e) => { e.preventDefault(); e.stopPropagation(); };
   ['click', 'mousedown', 'mouseup', 'dblclick', 'contextmenu', 'wheel', 'keydown', 'keyup', 'keypress', 'touchstart', 'touchmove', 'pointerdown'].forEach(t => ov.addEventListener(t, block, true));
   const badge = document.createElement('div');
-  badge.textContent = '🔒 Automatisation en cours — onglet piloté par Teams Transcript Downloader';
+  badge.textContent = '🔒 Scan en cours — onglet piloté par Teams Transcript Downloader';
   badge.style.cssText = 'margin-top:14px;max-width:90%;padding:8px 16px;border-radius:20px;background:rgba(98,100,167,0.96);color:#fff;font:600 13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;box-shadow:0 2px 10px rgba(0,0,0,0.25);text-align:center;';
   ov.appendChild(badge);
   document.documentElement.appendChild(ov);
@@ -344,13 +344,14 @@ async function hideGuide(tabId) {
   catch (e) { /* ignore */ }
 }
 
-// Voile bloquant = reflet de l'automatisation : ON → voile (empêche les clics par
-// erreur pendant le scan) ; OFF → pas de voile (navigation Teams manuelle possible).
+// Voile bloquant = reflet d'un scan EN COURS : un scan tourne → voile (empêche les
+// clics par erreur pendant que l'extension pilote l'onglet) ; aucun scan (automatisation
+// OFF, ou ON mais en pause/compte à rebours, ou scan terminé) → pas de voile (navigation
+// Teams manuelle possible).
 async function refreshOverlay(tabId) {
   const id = tabId != null ? tabId : dedicatedTabId;
   if (id == null) return;
-  const { autoEnabled } = await getSettings();
-  if (autoEnabled) await showOverlay(id);
+  if (isRunning) await showOverlay(id);
   else await hideOverlay(id);
 }
 
@@ -1004,7 +1005,7 @@ async function ensureTeamsTab() {
       if (t && isTeamsUrl(t.url || t.pendingUrl)) {
         await setDedicated(t.id);
         try { await chrome.sidePanel.setOptions({ tabId: t.id, path: 'panel.html', enabled: true }); } catch (e) { /* ignore */ }
-        refreshOverlay(t.id).catch(() => {}); // voile seulement si automatisation ON
+        refreshOverlay(t.id).catch(() => {}); // voile seulement si un scan est en cours
         return t.id;
       }
     } catch (e) { /* onglet fermé */ }
@@ -1287,6 +1288,7 @@ async function startScan(reason = 'manual') {
     await setState({ running: true, phase: 'opening', current: 0, total: 0, downloaded: 0, currentLabel: '', nextRunAt: null, summary: null, message: 'Ouverture de Teams…', reason });
 
     const tabId = await ensureTeamsTab();
+    await showOverlay(tabId); // scan en cours → voile bloquant pendant tout le run
 
     await setState({ phase: 'opening', message: 'Attente du chargement de Teams…' });
     const ready = await waitForChatList(tabId, myGen);
@@ -1402,6 +1404,9 @@ async function startScan(reason = 'manual') {
   } finally {
     isRunning = false;
     stopKeepAlive();
+    // Scan terminé (succès, erreur, vide ou arrêt) → on retire le voile : l'onglet
+    // redevient navigable même si l'automatisation reste ON (pause/compte à rebours).
+    if (dedicatedTabId != null) hideOverlay(dedicatedTabId).catch(() => {});
     // Point de sortie unique de la boucle d'automatisation :
     //   - scan invalidé (Stop / nouveau scan) → on ne planifie rien. Si une relance
     //     immédiate a été demandée pendant ce scan, on l'exécute maintenant.
@@ -1543,12 +1548,11 @@ chrome.tabs.onActivated.addListener(async ({ tabId }) => {
 chrome.tabs.onUpdated.addListener((tabId, changeInfo, tab) => {
   if (changeInfo.status === 'complete' || changeInfo.url) syncSidePanel(tab).catch(() => {});
   // Quand l'onglet piloté a fini de charger (création initiale ou rechargement),
-  // on applique l'habillage : automatisation ON → voile bloquant ; OFF → guide
+  // on applique l'habillage : un scan est en cours → voile bloquant ; sinon → guide
   // non bloquant « cliquez à nouveau » (et pas de voile, pour naviguer librement).
   if (changeInfo.status === 'complete' && tabId === dedicatedTabId) {
     (async () => {
-      const { autoEnabled } = await getSettings();
-      if (autoEnabled) { await showOverlay(tabId); await hideGuide(tabId); }
+      if (isRunning) { await showOverlay(tabId); await hideGuide(tabId); }
       else { await hideOverlay(tabId); await showGuide(tabId); }
     })().catch(() => {});
   }
@@ -1583,7 +1587,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         await chrome.storage.local.set({ autoEnabled: false });
         await resetToIdleState('Arrêté. Automatisation désactivée.');
         await updateActionUI();
-        await refreshOverlay(); // automatisation OFF → on retire le voile
+        if (dedicatedTabId != null) await hideOverlay(dedicatedTabId); // scan arrêté → on retire le voile sans attendre
         sendResponse({ ok: true });
         break;
       case 'extractManual':
@@ -1609,7 +1613,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
           await cancelAutoStart();
         }
         await updateActionUI();
-        await refreshOverlay(); // ON → voile bloquant ; OFF → retiré (navigation manuelle)
+        await refreshOverlay(); // voile seulement si un scan tourne déjà ; le démarrage du scan l'appliquera
         sendResponse({ ok: true });
         break;
       case 'debug': {

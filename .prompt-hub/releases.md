@@ -1,5 +1,21 @@
 # Releases
 
+## 0.3.6 — 2026-06-23
+
+- **Fix V3 — le voile gris ne s'affiche plus hors scan.** Le voile bloquant
+  reflétait l'état de l'automatisation (`autoEnabled`) : il restait donc affiché
+  même quand **aucun scan n'était en cours** (automatisation ON en pause/compte à
+  rebours, ou simplement activée sans scan). Désormais le voile reflète l'état
+  **scan en cours** (`isRunning`) :
+  - `refreshOverlay` se base sur `isRunning` au lieu de `autoEnabled` ;
+  - `startScan` applique le voile au démarrage et le retire dans le `finally`
+    (succès, erreur, vide ou arrêt) → l'onglet redevient navigable entre deux
+    scans même si l'automatisation reste ON ;
+  - le handler `onUpdated` de l'onglet piloté et l'arrêt (`stop`) suivent la même
+    règle ; libellé du badge « Scan en cours » au lieu de « Automatisation en
+    cours ».
+- `manifest.json` v3 → `3.0.23`.
+
 ## 0.3.5 — 2026-06-23
 
 - **Doc — README recentré sur la V3.** La V3 devient la version recommandée et
