@@ -1,5 +1,15 @@
 # Releases
 
+## 0.3.8 — 2026-06-23
+
+- **V3 — voile affiché dès que l'automatisation est ON.** Affinage de 0.3.6 :
+  le voile reflète désormais `autoEnabled || isRunning`. Automatisation **ON** →
+  voile présent **en permanence** (y compris pendant les pauses/compte à rebours
+  entre deux scans) ; automatisation **OFF** → voile uniquement pendant un scan en
+  cours (ex. extraction manuelle). `refreshOverlay`, le `finally` de `startScan`
+  et le handler `onUpdated` alignés ; badge neutre « Onglet piloté par Teams
+  Transcript Downloader ». `manifest.json` v3 → `3.0.25`.
+
 ## 0.3.7 — 2026-06-23
 
 - **Fix V3 — extraction incomplète : défilement trop rapide.** Le moteur

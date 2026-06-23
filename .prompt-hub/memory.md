@@ -1,5 +1,15 @@
 # Memory
 
+## 2026-06-23 — agent (Claude) — voile V3 = autoEnabled || isRunning
+
+- Action : Affinage de la règle du voile. Demande utilisateur : « si automation
+  active, overlay doit être actif ». Donc voile = `autoEnabled || isRunning`
+  (ON → voile permanent même en pause ; OFF → voile seulement pendant un scan).
+  `refreshOverlay`, `finally` de `startScan` (→ refreshOverlay), handler
+  `onUpdated` alignés ; badge neutre. `v3/manifest.json` → 3.0.25.
+- Note : ceci ajuste la règle isRunning-only posée plus tôt le même jour (0.3.6).
+- Outcome : success.
+
 ## 2026-06-23 — agent (Claude) — extraction V3 défilement chevauchant
 
 - Action : Corrigé l'extraction incomplète (scroll trop rapide). `frameFullExtract`
