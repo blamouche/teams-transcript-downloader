@@ -296,8 +296,8 @@ function pageApplyGuide() {
   arrow.style.cssText = 'color:#3b3b46;font-size:13px;font-weight:700;text-shadow:0 1px 3px rgba(255,255,255,.7);margin-right:6px;';
   const card = document.createElement('div');
   card.style.cssText = 'background:#6264a7;color:#fff;padding:13px 16px;border-radius:14px;box-shadow:0 8px 24px rgba(0,0,0,.4);text-align:left;';
-  card.innerHTML = '<div style="font-size:15px;font-weight:700;margin-bottom:5px;">👉 Cliquez à nouveau sur l’icône de l’extension</div>'
-    + '<div style="font-size:13px;font-weight:400;line-height:1.45;opacity:.96;">en haut à droite de Chrome, pour ouvrir le panneau latéral et <b>configurer</b> ou <b>lancer</b> le téléchargement des transcripts.</div>';
+  card.innerHTML = '<div style="font-size:15px;font-weight:700;margin-bottom:5px;">👉 Panneau latéral non visible ?</div>'
+    + '<div style="font-size:13px;font-weight:400;line-height:1.45;opacity:.96;">Si la <b>barre latérale</b> n’apparaît pas, <b>recliquez sur l’icône de l’extension</b> en haut à droite de Chrome pour l’ouvrir, puis <b>configurez</b> ou <b>lancez</b> le téléchargement des transcripts.</div>';
   guide.appendChild(arrow);
   guide.appendChild(card);
   document.documentElement.appendChild(guide);

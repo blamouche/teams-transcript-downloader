@@ -1,5 +1,12 @@
 # Releases
 
+## 0.3.9 — 2026-06-23
+
+- **V3 — texte de la bulle guide reformulé.** La carte affichée sur l'onglet
+  piloté indique désormais que **si la barre latérale n'est pas visible**, il faut
+  **recliquer sur l'icône de l'extension** pour l'ouvrir (titre « Panneau latéral
+  non visible ? »). `manifest.json` v3 → `3.0.26`.
+
 ## 0.3.8 — 2026-06-23
 
 - **V3 — voile affiché dès que l'automatisation est ON.** Affinage de 0.3.6 :
